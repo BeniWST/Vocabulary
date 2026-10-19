@@ -1,0 +1,1354 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vokabeln</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vokabeln">
+<meta name="theme-color" content="#f3f4fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0e19" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<style>
+:root{
+  --bg:#f3f4fa;--surface:#fff;--surface2:#eceef7;--text:#14172a;--muted:#6a6f8f;--border:rgba(20,23,60,.09);
+  --accent:#6c5ce7;--accent2:#a855f7;--ok:#16a34a;--okbg:rgba(22,163,74,.12);--bad:#e11d48;--badbg:rgba(225,29,72,.10);--warn:#d97706;
+  --lang:#6c5ce7;--shadow:0 6px 20px rgba(30,30,90,.07);--r:18px;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0c0e19;--surface:#161a2c;--surface2:#21263d;--text:#eef0ff;--muted:#9ba1c6;--border:rgba(255,255,255,.08);
+  --shadow:0 6px 24px rgba(0,0,0,.35);--okbg:rgba(34,197,94,.16);--badbg:rgba(244,63,94,.16)}}
+body[data-lang="en"]{--lang:#3b82f6} body[data-lang="fr"]{--lang:#ef4444} body[data-lang="la"]{--lang:#f59e0b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif}
+body{min-height:100vh;padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 100px);-webkit-text-size-adjust:100%}
+body.nonav{padding-bottom:calc(env(safe-area-inset-bottom) + 28px)}
+#app{max-width:560px;margin:0 auto}
+[hidden]{display:none!important}
+h1{font-size:28px;margin:2px 0 0;letter-spacing:-.02em} h2{font-size:21px;margin:0 0 12px} h3{font-size:17px;margin:0 0 8px}
+.muted{color:var(--muted)} .small{font-size:13px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
+.statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:6px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px;box-shadow:var(--shadow);min-width:0}
+.stat .big{font-weight:700;font-size:18px;margin-bottom:4px;white-space:nowrap}
+.bar{height:7px;background:var(--surface2);border-radius:99px;overflow:hidden;margin:4px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px;transition:width .4s}
+.bar.done i{background:linear-gradient(90deg,#22c55e,#16a34a)}
+.label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 4px 8px}
+.seg{display:flex;background:var(--surface2);border-radius:14px;padding:4px;gap:4px}
+.seg button{flex:1;min-width:0;border:0;background:transparent;color:var(--text);padding:10px 4px;border-radius:11px;font:inherit;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg button.on{background:var(--surface);box-shadow:0 2px 8px rgba(0,0,0,.12);color:var(--lang)}
+.chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px 6px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:8px 14px;border-radius:99px;font:inherit;font-size:14px;font-weight:600}
+.chip.on{background:var(--lang);color:#fff;border-color:transparent}
+.cta{display:block;width:100%;margin:24px 0 10px;border:0;border-radius:18px;padding:18px;font:inherit;font-size:18px;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 10px 26px rgba(108,92,231,.35)}
+.cta:disabled{background:var(--surface2);color:var(--muted);box-shadow:none}
+.btn{border:0;border-radius:14px;padding:13px 16px;font:inherit;font-weight:600;font-size:15px;background:var(--surface2);color:var(--text)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.btn.ghost{background:transparent;border:1px solid var(--border)}
+.btn.danger{background:var(--badbg);color:var(--bad)}
+.btn:disabled{opacity:.5}
+.wide{width:100%}
+.row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap} .grow{flex:1}
+.empty{text-align:center;padding:26px 16px;margin-top:20px} .empty .e{font-size:44px}
+.pill{border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:99px;padding:6px 10px;font:inherit;font-size:13px;white-space:nowrap}
+/* Session */
+.sesstop{display:flex;align-items:center;gap:12px;margin-bottom:16px} .sesstop .bar{flex:1;height:9px}
+.icon{border:0;background:var(--surface2);color:var(--text);width:40px;height:40px;border-radius:12px;font-size:18px;flex:none}
+.combo{text-align:center;font-weight:800;color:var(--warn);margin:-6px 0 10px;animation:pop .3s}
+.qcard{position:relative;background:var(--surface);border:1px solid var(--border);border-top:5px solid var(--lang);border-radius:22px;padding:20px 18px 30px;box-shadow:var(--shadow);text-align:center;margin-bottom:16px}
+.qcard.retry{border-top-color:var(--warn)}
+.qmeta{font-size:13px;color:var(--muted);margin-bottom:14px}
+.prompt{font-size:30px;font-weight:700;letter-spacing:-.01em;word-break:break-word}
+.speak{position:absolute;right:10px;bottom:10px;width:36px;height:36px;font-size:16px}
+.field,.typeform input{width:100%;font:inherit;font-size:18px;padding:14px 16px;border-radius:14px;border:2px solid var(--border);background:var(--surface);color:var(--text);outline:none}
+.field:focus,.typeform input:focus{border-color:var(--lang)}
+.typeform input:disabled{opacity:.8}
+.accbar{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.accbar button{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:10px;min-width:40px;padding:8px;font:inherit;font-size:17px}
+.mc{display:grid;gap:10px}
+.mc button{border:2px solid var(--border);background:var(--surface);color:var(--text);border-radius:16px;padding:15px 16px;font:inherit;font-size:17px;font-weight:600;text-align:left}
+.mc button.right{border-color:var(--ok);background:var(--okbg)} .mc button.wrong{border-color:var(--bad);background:var(--badbg)}
+.reveal{text-align:center;font-size:24px;font-weight:700;padding:16px;background:var(--surface);border-radius:16px;border:2px dashed var(--border)}
+.fb{border-radius:18px;padding:16px;margin-top:14px;animation:pop .25s}
+.fb.ok{background:var(--okbg)} .fb.bad{background:var(--badbg)}
+.fbhead{font-weight:800;font-size:18px;margin-bottom:6px}
+.fb.ok .fbhead{color:var(--ok)} .fb.bad .fbhead{color:var(--bad)}
+.xp{font-size:13px;background:var(--surface);color:var(--accent);padding:3px 8px;border-radius:99px;margin-left:6px;vertical-align:middle}
+.sol{font-size:21px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sol .icon{width:32px;height:32px;font-size:14px}
+.given{color:var(--muted);margin-top:4px} .hint{margin-top:8px} .note{margin-top:8px;color:var(--muted);font-style:italic}
+@keyframes pop{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}
+/* Done */
+.done{text-align:center;padding-top:24px} .done .e{font-size:64px} .done .score{font-size:42px;font-weight:800;margin:6px 0}
+.wl{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);text-align:left} .wl:last-child{border:0}
+.wl span:last-child{color:var(--muted);text-align:right}
+/* Stats */
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+.stack{display:flex;height:14px;border-radius:99px;overflow:hidden;background:var(--surface2);margin:10px 0}
+.stack i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:3px;background:var(--c);margin-right:4px}
+.urow{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:14px}
+.urow .n{width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .urow .bar{flex:1} .urow .p{width:42px;text-align:right;color:var(--muted)}
+/* Eltern */
+.f{margin-bottom:12px} .f label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:0 4px 6px}
+select.field{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 20px) 50%,calc(100% - 14px) 50%;background-size:6px 6px;background-repeat:no-repeat;padding-right:36px;font-size:16px}
+textarea.field{min-height:180px;font-size:16px;resize:vertical;line-height:1.5}
+.check{display:flex;gap:10px;align-items:center;margin:8px 4px;font-size:15px}
+.check input{width:20px;height:20px}
+.prev{font-size:14px;margin:10px 4px} .prev .badl{color:var(--bad)}
+.vrow{display:flex;width:100%;gap:10px;align-items:center;text-align:left;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text);padding:11px 2px;font:inherit;font-size:15px}
+.vrow b{flex:1;font-weight:600;word-break:break-word} .vrow span{flex:1;color:var(--muted);word-break:break-word}
+.boxes{font-size:11px;color:var(--muted);white-space:nowrap}
+.lock{text-align:center;padding-top:24px} .lock .e{font-size:48px}
+.pinin{text-align:center;letter-spacing:.4em;font-size:24px!important}
+/* Tabbar, Toast, Modal */
+#tabbar{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:4px;padding:8px 12px calc(env(safe-area-inset-bottom) + 8px);background:var(--surface);background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--border);z-index:10}
+#tabbar button{flex:1;max-width:150px;border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;font-weight:600;padding:4px;border-radius:12px}
+#tabbar button .ti{display:block;font-size:22px;filter:grayscale(1);opacity:.7}
+#tabbar button.on{color:var(--accent)} #tabbar button.on .ti{filter:none;opacity:1}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 92px);transform:translateX(-50%) translateY(16px);background:#1f2340;color:#fff;padding:12px 16px;border-radius:14px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;width:max-content;max-width:90vw;z-index:30;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%)} #toast.err{background:var(--bad)}
+#modal{position:fixed;inset:0;background:rgba(5,6,15,.55);display:flex;align-items:flex-end;justify-content:center;z-index:20;padding:12px}
+#modal .sheet{background:var(--bg);width:100%;max-width:520px;border-radius:22px;padding:18px;padding-bottom:calc(18px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto;animation:pop .2s}
+.plist{display:grid;gap:10px;margin-bottom:14px}
+.lbtn{display:flex;align-items:center;gap:14px;width:100%;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:18px;padding:14px 16px;font:inherit;font-size:18px;font-weight:700;box-shadow:var(--shadow);margin-bottom:10px;text-align:left}
+.av{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:18px;flex:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <section id="v-login" class="view" hidden></section>
+  <section id="v-pick" class="view" hidden></section>
+  <section id="v-home" class="view" hidden></section>
+  <section id="v-session" class="view" hidden></section>
+  <section id="v-done" class="view" hidden></section>
+  <section id="v-stats" class="view" hidden></section>
+  <section id="v-parent" class="view" hidden></section>
+</div>
+<nav id="tabbar">
+  <button data-act="go" data-v="home"><span class="ti">📚</span>Lernen</button>
+  <button data-act="go" data-v="stats"><span class="ti">📊</span>Statistik</button>
+  <button data-act="go" data-v="parent"><span class="ti">🔒</span>Eltern</button>
+</nav>
+<div id="modal" hidden><div class="sheet" id="sheet"></div></div>
+<div id="toast"></div>
+<input type="file" id="bfile" accept=".json,application/json" hidden>
+
+<script src="config.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   Vokabeltrainer – App-Logik
+   Datenmodell: Familien-Konto → mehrere Lernprofile (Kinder)
+   → je Profil eigene Vokabeln, eigener Lernstand, eigene Punkte
+   ============================================================ */
+const C = window.VT_CONFIG || {};
+const LANGS = C.languages || { en: { name: 'Englisch', flag: '🇬🇧', speech: 'en-GB' } };
+const CLOUD = !!(C.supabaseUrl && C.supabaseKey);
+const VERSION = '1.1';
+const PARENT = '__parent';
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pct = (a, b) => b ? Math.max(0, Math.min(100, Math.round(a / b * 100))) : 0;
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+const ts = x => Date.parse(x || 0) || 0;
+const nowIso = () => new Date().toISOString();
+const pad = n => String(n).padStart(2, '0');
+function dayStr(d = new Date()) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function addDays(n) { const d = new Date(); d.setDate(d.getDate() + n); return dayStr(d); }
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function uuid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = crypto.getRandomValues(new Uint8Array(1))[0] & 15;
+    return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+  });
+}
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem('vt_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('vt_' + k, JSON.stringify(v)); } catch (e) { console.warn('Speichern fehlgeschlagen', e); } },
+  del(k) { try { localStorage.removeItem('vt_' + k); } catch (e) { } }
+};
+
+/* ============================================================
+   Zustand
+   ============================================================ */
+const S = {
+  learners: LS.get('learners', []),            // [{id, name, created_at}]
+  prefs: Object.assign({
+    learner: null,          // Lernprofil dieses Geräts (oder '__parent')
+    plearner: null,         // im Eltern-Bereich gewähltes Kind
+    slearner: null,         // in der Statistik gewähltes Kind
+    lang: Object.keys(LANGS)[0], unit: '*', dir: 'mix', mode: 'type',
+    pin: null, autoSpeak: false, everSynced: false, lastSync: null
+  }, LS.get('prefs', {})),
+  auth: LS.get('auth', null)
+};
+const savePrefs = () => LS.set('prefs', S.prefs);
+const saveLearners = () => LS.set('learners', S.learners);
+const learner = id => S.learners.find(l => l.id === id);
+const sortLearners = () => S.learners.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+
+/* ---------- Daten je Lernprofil ---------- */
+const DEFAULT_STATE = { goal: 20, settingsAt: null, xp: 0, streak: 0, lastDay: null, today: { day: null, count: 0 }, updated_at: null };
+const DB = {};
+function data(lid) {
+  if (!lid || lid === PARENT) return null;
+  if (!DB[lid]) DB[lid] = {
+    lid,
+    vocab: LS.get('vocab_' + lid, []),
+    progress: LS.get('progress_' + lid, {}),
+    state: Object.assign({}, DEFAULT_STATE, LS.get('state_' + lid, {})),
+    dirty: new Set(LS.get('dirty_' + lid, [])),
+    stateDirty: LS.get('stateDirty_' + lid, false),
+    everSynced: LS.get('ever_' + lid, false)
+  };
+  return DB[lid];
+}
+function saveData(d) {
+  if (!d) return;
+  LS.set('vocab_' + d.lid, d.vocab); LS.set('progress_' + d.lid, d.progress); LS.set('state_' + d.lid, d.state);
+  LS.set('dirty_' + d.lid, [...d.dirty]); LS.set('stateDirty_' + d.lid, d.stateDirty); LS.set('ever_' + d.lid, d.everSynced);
+}
+function dropData(lid) {
+  delete DB[lid];
+  ['vocab_', 'progress_', 'state_', 'dirty_', 'stateDirty_', 'ever_'].forEach(p => LS.del(p + lid));
+}
+const isLearnerDevice = () => !!(S.prefs.learner && S.prefs.learner !== PARENT && learner(S.prefs.learner));
+const AD = () => isLearnerDevice() ? data(S.prefs.learner) : null;     // aktives Profil dieses Geräts
+function PD() {   // Profil im Eltern-Bereich
+  if (!learner(S.prefs.plearner)) S.prefs.plearner = isLearnerDevice() ? S.prefs.learner : (S.learners[0] || {}).id || null;
+  return data(S.prefs.plearner);
+}
+function SD() {   // Profil in der Statistik
+  if (!learner(S.prefs.slearner)) S.prefs.slearner = isLearnerDevice() ? S.prefs.learner : (S.learners[0] || {}).id || null;
+  return data(S.prefs.slearner);
+}
+
+function touchState(d) { d.state.updated_at = nowIso(); d.stateDirty = true; }
+function todayCount(d) { const t = d.state.today; return t && t.day === dayStr() ? t.count : 0; }
+function currentStreak(d) { const st = d.state; return (st.lastDay === dayStr() || st.lastDay === addDays(-1)) ? (st.streak || 0) : 0; }
+function levelInfo(xp) {
+  let lvl = 1, need = 100, base = 0;
+  while (xp >= base + need) { base += need; lvl++; need = 100 + (lvl - 1) * 50; }
+  return { lvl, cur: xp - base, need };
+}
+function mergeState(a, b) {
+  a = a || {}; b = b || {};
+  const m = Object.assign({}, DEFAULT_STATE, b, a);
+  m.xp = Math.max(a.xp || 0, b.xp || 0);
+  const la = a.lastDay || '', lb = b.lastDay || '';
+  const s = la > lb ? a : lb > la ? b : ((a.streak || 0) >= (b.streak || 0) ? a : b);
+  m.lastDay = s.lastDay || null; m.streak = s.streak || 0;
+  const ta = a.today || {}, tb = b.today || {};
+  m.today = ta.day === tb.day ? { day: ta.day || null, count: Math.max(ta.count || 0, tb.count || 0) } : ((ta.day || '') > (tb.day || '') ? ta : tb);
+  const sa = ts(a.settingsAt) >= ts(b.settingsAt) ? a : b;
+  m.goal = sa.goal || 20; m.settingsAt = sa.settingsAt || null;
+  m.updated_at = ts(a.updated_at) >= ts(b.updated_at) ? a.updated_at : b.updated_at;
+  return m;
+}
+
+/* ============================================================
+   Vokabeln & Leitner-System
+   ============================================================ */
+const INTERVAL = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 };   // Tage bis zur nächsten Abfrage je Fach
+const pkey = (id, dir) => id + '|' + dir;
+const prog = (d, id, dir) => d.progress[pkey(id, dir)];
+const promptOf = it => it.dir === 'fd' ? it.card.term : it.card.translation;
+const answerOf = it => it.dir === 'fd' ? it.card.translation : it.card.term;
+
+function unitsOf(d, lang) {
+  if (!d) return [];
+  return [...new Set(d.vocab.filter(v => v.lang === lang).map(v => v.unit))].sort(collator.compare);
+}
+function cardsFor(d, lang, unit) { return d ? d.vocab.filter(v => v.lang === lang && (unit === '*' || v.unit === unit)) : []; }
+function isDue(p, t) { return p && p.box > 0 && p.due && p.due <= t; }
+
+function grade(d, card, dir, ok) {
+  const k = pkey(card.id, dir);
+  const p = Object.assign({ box: 0, due: null, correct: 0, wrong: 0 }, d.progress[k]);
+  if (ok) { p.box = p.box === 0 ? 2 : Math.min(5, p.box + 1); p.correct++; }
+  else { p.box = 1; p.wrong++; }
+  p.due = addDays(ok ? INTERVAL[p.box] : 1);
+  p.updated_at = nowIso();
+  d.progress[k] = p; d.dirty.add(k);
+}
+
+function buildQueue(d, { lang, unit, dir, test }) {
+  const t = dayStr();
+  const dirs = dir === 'mix' ? ['fd', 'df'] : [dir];
+  const cards = shuffle(cardsFor(d, lang, unit).slice());
+  const due = [], fresh = [], all = [];
+  for (const c of cards) {
+    let pd = null, pn = null;
+    for (const dr of shuffle(dirs.slice())) {
+      const p = prog(d, c.id, dr);
+      if (isDue(p, t)) { if (!pd || p.box < prog(d, c.id, pd).box) pd = dr; }
+      else if (!p || p.box === 0) { if (!pn) pn = dr; }
+    }
+    all.push({ card: c, dir: pick(dirs) });
+    if (pd) due.push({ card: c, dir: pd });
+    else if (pn) fresh.push({ card: c, dir: pn });
+  }
+  if (test) return all.slice(0, 50);
+  due.sort((a, b) => prog(d, a.card.id, a.dir).box - prog(d, b.card.id, b.dir).box);
+  fresh.sort((a, b) => collator.compare(a.card.unit, b.card.unit) || (a.card.created_at || '').localeCompare(b.card.created_at || ''));
+  const q = due.slice(0, 20);
+  const room = Math.max(0, Math.min(8, 20 - q.length));
+  return shuffle(q.concat(fresh.slice(0, room)));
+}
+
+/* ============================================================
+   Antwort prüfen
+   ============================================================ */
+const ART = /^(?:(?:to|the|a|an|der|die|das|ein|eine|einen|le|la|les|un|une|des|du)\s+|l')/;
+function norm(s) {
+  return String(s || '').normalize('NFC').toLowerCase()
+    .replace(/[’`´]/g, "'")
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+    .replace(/[.!?¿¡"„“”«»…]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+const noAcc = s => s.normalize('NFD').replace(/\p{M}/gu, '').replace(/œ/g, 'oe').replace(/æ/g, 'ae');
+const strip = s => s.replace(ART, '').trim();
+const artOf = s => ((s.match(ART) || [''])[0]).trim();
+function alts(s) { const l = String(s).split(/[;,\/]/).map(norm).filter(Boolean); return l.length ? l : [norm(s)]; }
+function lev(a, b) {
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function check(input, expected) {
+  const u = norm(input);
+  if (!u) return { ok: false };
+  const list = alts(expected);
+  for (const a of list) if (u === a) return { ok: true };
+  for (const a of list) if (noAcc(u) === noAcc(a)) return { ok: true, hint: 'Achte auf die Akzente.' };
+  for (const a of list) {
+    if (!strip(a)) continue;
+    if (noAcc(strip(u)) === noAcc(strip(a))) {
+      if (artOf(u) && artOf(a) && artOf(u) !== artOf(a)) return { ok: false, near: true, hint: 'Falscher Artikel.' };
+      const accHint = strip(u) !== strip(a) ? ' Achte auch auf die Akzente.' : '';
+      if (artOf(a) && !artOf(u)) return { ok: true, hint: 'Denk beim nächsten Mal an „' + artOf(a) + '“.' + accHint };
+      return { ok: true, hint: accHint.trim() || undefined };
+    }
+  }
+  for (const a of list) {
+    const x = noAcc(strip(u)), y = noAcc(strip(a));
+    if (y.length >= 5 && lev(x, y) <= 1) return { ok: false, near: true, hint: 'Nur ein Buchstabe falsch – Tippfehler?' };
+  }
+  return { ok: false };
+}
+
+/* ============================================================
+   Vorlesen
+   ============================================================ */
+function speak(text, lang) {
+  const code = (LANGS[lang] || {}).speech;
+  if (!code || !('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(String(text).replace(/\([^)]*\)|\[[^\]]*\]/g, '').split(/[;\/]/)[0]);
+    u.lang = code; u.rate = 0.9;
+    const voices = speechSynthesis.getVoices();
+    const v = voices.find(v => v.lang.replace('_', '-') === code) || voices.find(v => v.lang.startsWith(code.slice(0, 2)));
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
+  } catch (e) { console.warn(e); }
+}
+
+/* ============================================================
+   Supabase (REST, ohne Bibliothek)
+   ============================================================ */
+const pq = v => encodeURIComponent('"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"');
+const API = {
+  async auth(grant, body) {
+    const r = await fetch(C.supabaseUrl + '/auth/v1/token?grant_type=' + grant, {
+      method: 'POST', headers: { apikey: C.supabaseKey, 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(j.error_description || j.msg || j.message || ('Fehler ' + r.status)), { status: r.status });
+    return j;
+  },
+  setSession(j) {
+    S.auth = {
+      access: j.access_token, refresh: j.refresh_token,
+      exp: Date.now() + (j.expires_in || 3600) * 1000,
+      email: (j.user && j.user.email) || (S.auth && S.auth.email)
+    };
+    LS.set('auth', S.auth);
+  },
+  async token(force) {
+    if (!S.auth) throw Object.assign(new Error('Nicht angemeldet'), { status: 401 });
+    if (force || Date.now() > S.auth.exp - 60000) {
+      try { API.setSession(await API.auth('refresh_token', { refresh_token: S.auth.refresh })); }
+      catch (e) {
+        if (e.status >= 400 && e.status < 500) { S.auth = null; LS.set('auth', null); show('login'); }
+        throw e;
+      }
+    }
+    return S.auth.access;
+  },
+  async req(path, { method = 'GET', body, prefer } = {}, retried) {
+    const tok = await API.token();
+    const h = { apikey: C.supabaseKey, Authorization: 'Bearer ' + tok };
+    if (body !== undefined) h['Content-Type'] = 'application/json';
+    if (prefer) h.Prefer = prefer;
+    const r = await fetch(C.supabaseUrl + '/rest/v1/' + path, { method, headers: h, body: body !== undefined ? JSON.stringify(body) : undefined });
+    if (r.status === 401 && !retried) { await API.token(true); return API.req(path, { method, body, prefer }, true); }
+    if (!r.ok) { const t = await r.text(); throw Object.assign(new Error('Server ' + r.status + ': ' + t.slice(0, 200)), { status: r.status }); }
+    const txt = await r.text();
+    return txt ? JSON.parse(txt) : null;
+  },
+  async all(table, select, order, filter = '') {
+    let out = [], off = 0;
+    for (;;) {
+      const rows = await API.req(`${table}?select=${select}${filter ? '&' + filter : ''}&order=${order}&limit=1000&offset=${off}`);
+      out = out.concat(rows || []);
+      if (!rows || rows.length < 1000) break;
+      off += 1000;
+    }
+    return out;
+  }
+};
+const chunks = (a, n) => { const out = []; for (let i = 0; i < a.length; i += n) out.push(a.slice(i, i + n)); return out; };
+const vocabRow = (v, lid) => ({ id: v.id, learner_id: lid, lang: v.lang, unit: v.unit, term: v.term, translation: v.translation, note: v.note || null, created_at: v.created_at });
+
+/* ---------- Lernprofile ---------- */
+async function learnerAdd(name) {
+  const l = { id: uuid(), name, created_at: nowIso() };
+  if (CLOUD) await API.req('learners', { method: 'POST', body: l, prefer: 'return=minimal' });
+  S.learners.push(l); sortLearners(); saveLearners();
+  return l;
+}
+async function learnerRename(id, name) {
+  if (CLOUD) await API.req('learners?id=eq.' + id, { method: 'PATCH', body: { name }, prefer: 'return=minimal' });
+  const l = learner(id); if (l) l.name = name; saveLearners();
+}
+async function learnerDelete(id) {
+  if (CLOUD) await API.req('learners?id=eq.' + id, { method: 'DELETE' });   // löscht Vokabeln & Lernstand mit (cascade)
+  S.learners = S.learners.filter(l => l.id !== id); saveLearners(); dropData(id);
+  if (S.prefs.learner === id) S.prefs.learner = null;
+  savePrefs();
+}
+
+/* ---------- Vokabeln ---------- */
+async function vocabInsert(d, list) {
+  if (!list.length) return;
+  if (CLOUD) for (const c of chunks(list, 500)) await API.req('vocab', { method: 'POST', body: c.map(v => vocabRow(v, d.lid)), prefer: 'return=minimal' });
+  d.vocab.push(...list); saveData(d);
+}
+async function vocabUpdate(d, id, f) {
+  if (CLOUD) await API.req('vocab?id=eq.' + id, { method: 'PATCH', body: Object.assign({}, f, { updated_at: nowIso() }), prefer: 'return=minimal' });
+  Object.assign(d.vocab.find(v => v.id === id) || {}, f); saveData(d);
+}
+function dropProgress(d, ids) {
+  const set = new Set(ids);
+  for (const k of Object.keys(d.progress)) if (set.has(k.split('|')[0])) { delete d.progress[k]; d.dirty.delete(k); }
+}
+async function vocabDelete(d, id) {
+  if (CLOUD) await API.req('vocab?id=eq.' + id, { method: 'DELETE' });
+  d.vocab = d.vocab.filter(v => v.id !== id); dropProgress(d, [id]); saveData(d);
+}
+const unitFilter = (d, lang, unit) => `vocab?learner_id=eq.${d.lid}&lang=eq.${pq(lang)}&unit=eq.${pq(unit)}`;
+async function unitRename(d, lang, oldU, newU) {
+  if (CLOUD) await API.req(unitFilter(d, lang, oldU), { method: 'PATCH', body: { unit: newU, updated_at: nowIso() }, prefer: 'return=minimal' });
+  d.vocab.forEach(v => { if (v.lang === lang && v.unit === oldU) v.unit = newU; }); saveData(d);
+}
+async function unitDelete(d, lang, unit) {
+  if (CLOUD) await API.req(unitFilter(d, lang, unit), { method: 'DELETE' });
+  const ids = d.vocab.filter(v => v.lang === lang && v.unit === unit).map(v => v.id);
+  d.vocab = d.vocab.filter(v => !(v.lang === lang && v.unit === unit)); dropProgress(d, ids); saveData(d);
+}
+async function unitCopy(from, to, lang, unit) {
+  const have = new Set(to.vocab.filter(v => v.lang === lang && v.unit === unit).map(v => norm(v.term) + '|' + norm(v.translation)));
+  const base = Date.now();
+  const list = cardsFor(from, lang, unit)
+    .filter(v => !have.has(norm(v.term) + '|' + norm(v.translation)))
+    .map((v, i) => ({ id: uuid(), lang, unit, term: v.term, translation: v.translation, note: v.note || null, created_at: new Date(base + i).toISOString() }));
+  await vocabInsert(to, list);
+  return list.length;
+}
+
+/* ---------- Synchronisation ---------- */
+let SYNC = { s: CLOUD ? 'idle' : 'local', msg: '' };
+let syncing = null;
+function syncBadge() {
+  const m = { local: ['📱', 'Lokal'], idle: ['☁️', 'Cloud'], sync: ['⏳', 'Sync …'], ok: ['☁️', 'Synchron'], err: ['⚠️', 'Sync-Fehler'], off: ['📴', 'Offline'] }[SYNC.s];
+  return `<button id="syncb" class="pill" data-act="sync-now">${m[0]} ${m[1]}</button>`;
+}
+function setSync(s, msg = '') { SYNC = { s, msg }; const b = $('#syncb'); if (b) b.outerHTML = syncBadge(); }
+
+async function syncLearners() {
+  const remote = await API.all('learners', 'id,name,created_at', 'created_at.asc');
+  if (!remote.length && S.learners.length && !S.prefs.everSynced) {
+    // Erster Cloud-Start nach dem lokalen Testmodus: lokale Profile hochladen
+    await API.req('learners', { method: 'POST', body: S.learners.map(l => ({ id: l.id, name: l.name, created_at: l.created_at })), prefer: 'resolution=ignore-duplicates,return=minimal' });
+    return true;
+  }
+  S.learners = remote; sortLearners(); saveLearners();
+  return false;
+}
+async function syncLearner(d) {
+  const f = 'learner_id=eq.' + d.lid;
+  // 1) Vokabeln holen (Server ist maßgeblich)
+  const remote = await API.all('vocab', 'id,lang,unit,term,translation,note,created_at', 'created_at.asc,id.asc', f);
+  if (!remote.length && d.vocab.length && !d.everSynced) {
+    for (const c of chunks(d.vocab, 500)) await API.req('vocab', { method: 'POST', body: c.map(v => vocabRow(v, d.lid)), prefer: 'resolution=ignore-duplicates,return=minimal' });
+  } else d.vocab = remote;
+  const ids = new Set(d.vocab.map(v => v.id));
+
+  // 2) Lernstand hochladen
+  const sent = {}, rows = [];
+  for (const k of [...d.dirty]) {
+    const [id, dir] = k.split('|'), p = d.progress[k];
+    if (!p || !ids.has(id)) { d.dirty.delete(k); continue; }
+    sent[k] = p.updated_at;
+    rows.push({ learner_id: d.lid, vocab_id: id, dir, box: p.box, due: p.due, correct: p.correct || 0, wrong: p.wrong || 0, updated_at: p.updated_at });
+  }
+  for (const c of chunks(rows, 500)) await API.req('progress?on_conflict=learner_id,vocab_id,dir', { method: 'POST', body: c, prefer: 'resolution=merge-duplicates,return=minimal' });
+  for (const k of Object.keys(sent)) if (d.progress[k] && d.progress[k].updated_at === sent[k]) d.dirty.delete(k);
+
+  // 3) Lernstand holen und zusammenführen
+  const rp = await API.all('progress', 'vocab_id,dir,box,due,correct,wrong,updated_at', 'vocab_id.asc,dir.asc', f);
+  for (const r of rp) {
+    const k = pkey(r.vocab_id, r.dir), l = d.progress[k];
+    if (d.dirty.has(k)) continue;
+    if (!l || ts(r.updated_at) > ts(l.updated_at)) d.progress[k] = { box: r.box, due: r.due, correct: r.correct, wrong: r.wrong, updated_at: r.updated_at };
+  }
+  for (const k of Object.keys(d.progress)) if (!ids.has(k.split('|')[0])) { delete d.progress[k]; d.dirty.delete(k); }
+
+  // 4) Punkte, Serie, Tagesziel
+  const rs = ((await API.req('app_state?select=state,updated_at&' + f)) || [])[0];
+  if (rs) d.state = mergeState(d.state, Object.assign({}, rs.state, { updated_at: rs.updated_at }));
+  if (d.stateDirty || !rs) {
+    await API.req('app_state?on_conflict=learner_id', { method: 'POST', body: [{ learner_id: d.lid, state: d.state, updated_at: nowIso() }], prefer: 'resolution=merge-duplicates,return=minimal' });
+    d.stateDirty = false;
+  }
+  d.everSynced = true;
+  saveData(d);
+}
+function sync(manual) {
+  if (!CLOUD || !S.auth) return Promise.resolve();
+  if (syncing) return syncing;
+  syncing = (async () => {
+    setSync('sync');
+    try {
+      const migrate = await syncLearners();
+      let lids = migrate ? S.learners.map(l => l.id)
+        : [S.prefs.learner, VIEW === 'parent' ? S.prefs.plearner : null, VIEW === 'stats' ? S.prefs.slearner : null];
+      lids = [...new Set(lids)].filter(id => id && learner(id));
+      for (const id of lids) await syncLearner(data(id));
+      if (migrate) await syncLearners();
+      S.prefs.everSynced = true; S.prefs.lastSync = nowIso(); savePrefs();
+      setSync('ok');
+      if (manual) toast('Synchronisiert ✓');
+    } catch (e) {
+      console.warn(e);
+      setSync(navigator.onLine ? 'err' : 'off', e.message);
+      if (manual) toast(navigator.onLine ? 'Sync-Fehler: ' + e.message : 'Keine Internetverbindung', true);
+    } finally {
+      syncing = null;
+      afterSync();
+    }
+  })();
+  return syncing;
+}
+function afterSync() {
+  if (!VIEW || VIEW === 'session' || VIEW === 'done' || VIEW === 'login') return;
+  if (VIEW !== 'pick' && S.prefs.learner && S.prefs.learner !== PARENT && !learner(S.prefs.learner)) { S.prefs.learner = null; savePrefs(); return show('pick'); }
+  const a = document.activeElement, typing = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
+  if (typing) return;
+  if (VIEW === 'home') renderHome();
+  else if (VIEW === 'stats') renderStats();
+  else if (VIEW === 'pick') renderPick();
+  else if (VIEW === 'parent' && UNLOCK) renderParent();
+}
+
+/* ============================================================
+   Navigation & Hilfen
+   ============================================================ */
+let VIEW = null, SES = null, UNLOCK = false, PTAB = 'import';
+const IMP = { lang: null, unit: null, text: '', swap: false, newUnit: '', lid: null };
+const LST = { lang: null, unit: '*', q: '' };
+
+function show(v) {
+  if ((v === 'home' || v === 'stats' || v === 'parent') && CLOUD && !S.auth) v = 'login';
+  if ((v === 'home' || v === 'stats') && !S.prefs.learner) v = 'pick';
+  VIEW = v;
+  $$('.view').forEach(e => e.hidden = e.id !== 'v-' + v);
+  const nonav = ['session', 'login', 'done', 'pick'].includes(v);
+  $('#tabbar').hidden = nonav;
+  document.body.classList.toggle('nonav', nonav);
+  $$('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  ({ login: renderLogin, pick: renderPick, home: renderHome, session: renderQ, done: renderDone, stats: renderStats, parent: renderParent })[v]();
+  window.scrollTo(0, 0);
+}
+let toastT;
+function toast(msg, err) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
+  clearTimeout(toastT); toastT = setTimeout(() => t.className = '', err ? 4500 : 2600);
+}
+function openModal(html) { $('#sheet').innerHTML = html; $('#modal').hidden = false; }
+function closeModal() { $('#modal').hidden = true; $('#sheet').innerHTML = ''; }
+const fmtDate = () => new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+const langOpts = sel => Object.entries(LANGS).map(([k, l]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${l.flag} ${esc(l.name)}</option>`).join('');
+const learnerChips = (act, curId) => S.learners.length > 1 || !isLearnerDevice()
+  ? `<div class="chips" style="margin-bottom:12px">${S.learners.map(l => `<button class="chip ${l.id === curId ? 'on' : ''}" data-act="${act}" data-v="${l.id}">👤 ${esc(l.name)}</button>`).join('')}</div>` : '';
+function askPin() {
+  if (!S.prefs.pin || UNLOCK) return true;
+  const p = prompt('Eltern-PIN eingeben:');
+  if (p === null) return false;
+  if (p.trim() !== S.prefs.pin) { toast('Falsche PIN', true); return false; }
+  UNLOCK = true; return true;
+}
+
+/* ============================================================
+   Login & Profilwahl
+   ============================================================ */
+function renderLogin() {
+  $('#v-login').innerHTML = `
+  <div class="lock"><div class="e">📚</div><h1>Vokabeltrainer</h1><p class="muted">Einmal mit dem Familien-Konto anmelden.</p></div>
+  <form id="lf" class="card" autocomplete="on">
+    <div class="f"><label>E-Mail</label><input id="le" class="field" type="email" autocomplete="username" autocapitalize="off" required></div>
+    <div class="f"><label>Passwort</label><input id="lp" class="field" type="password" autocomplete="current-password" required></div>
+    <div id="lerr" class="small" style="color:var(--bad);margin:0 4px 10px"></div>
+    <button id="lb" class="btn primary wide" type="submit">Anmelden</button>
+  </form>`;
+}
+async function doLogin() {
+  const btn = $('#lb'); btn.disabled = true; $('#lerr').textContent = '';
+  try {
+    API.setSession(await API.auth('password', { email: $('#le').value.trim(), password: $('#lp').value }));
+    show(S.prefs.learner ? 'home' : 'pick'); sync(true);
+  } catch (e) {
+    $('#lerr').textContent = e.status === 400 ? 'E-Mail oder Passwort falsch.' : 'Anmeldung fehlgeschlagen: ' + e.message;
+  } finally { btn.disabled = false; }
+}
+function renderPick() {
+  const loading = CLOUD && SYNC.s === 'sync' && !S.learners.length;
+  $('#v-pick').innerHTML = `
+  <div class="lock"><div class="e">👋</div><h1>Wer lernt hier?</h1><p class="muted">Wähle das Profil für dieses Gerät. Das lässt sich später im Eltern-Bereich ändern.</p></div>
+  ${loading ? `<div class="card empty"><p class="muted">Profile werden geladen …</p></div>` : ''}
+  <div class="plist">${S.learners.map(l => `<button class="lbtn" data-act="pick" data-v="${l.id}"><span class="av">${esc((l.name || '?').slice(0, 1).toUpperCase())}</span>${esc(l.name)}</button>`).join('')}</div>
+  <form id="nlf" class="card">
+    <h3>${S.learners.length ? 'Neues Profil' : 'Erstes Profil anlegen'}</h3>
+    <div class="row" style="margin-top:0"><input id="nln" class="field grow" placeholder="Vorname" maxlength="30" autocomplete="off"><button class="btn primary" type="submit">Anlegen</button></div>
+  </form>
+  <button class="btn ghost wide" data-act="pick" data-v="${PARENT}">👨‍👩‍👧 Nur Eltern-Gerät (ohne eigenes Lernprofil)</button>`;
+}
+function pickLearner(id) {
+  if (id === PARENT && !askPin()) return;
+  S.prefs.learner = id; savePrefs();
+  show(id === PARENT ? 'parent' : 'home'); sync();
+}
+async function addLearnerFromPick() {
+  const name = $('#nln').value.trim();
+  if (!name) return;
+  if (S.learners.length && !askPin()) return;
+  try { const l = await learnerAdd(name); pickLearner(l.id); }
+  catch (e) { toast('Fehler: ' + e.message, true); }
+}
+
+/* ============================================================
+   Startseite
+   ============================================================ */
+function renderHome() {
+  const d = AD();
+  if (!d) {
+    document.body.dataset.lang = '';
+    $('#v-home').innerHTML = `
+    <header class="top"><div><div class="muted small">${esc(fmtDate())}</div><h1>Hallo 👋</h1></div>${syncBadge()}</header>
+    <div class="card empty"><div class="e">👨‍👩‍👧</div><h3>Eltern-Gerät</h3>
+      <p class="muted small">Hier pflegst du die Vokabeln deiner Kinder und siehst ihren Lernfortschritt.</p>
+      <div class="row"><button class="btn primary grow" data-act="go" data-v="parent">🔒 Eltern-Bereich</button><button class="btn grow" data-act="go" data-v="stats">📊 Statistik</button></div>
+    </div>`;
+    return;
+  }
+  const P = S.prefs, st = d.state, me = learner(d.lid);
+  if (!LANGS[P.lang]) P.lang = Object.keys(LANGS)[0];
+  document.body.dataset.lang = P.lang;
+  const units = unitsOf(d, P.lang);
+  if (P.unit !== '*' && !units.includes(P.unit)) P.unit = '*';
+  const L = LANGS[P.lang], code = P.lang.toUpperCase();
+  const lv = levelInfo(st.xp || 0), tc = todayCount(d), goal = st.goal || 20;
+  const total = cardsFor(d, P.lang, P.unit).length;
+  const q = total ? buildQueue(d, { lang: P.lang, unit: P.unit, dir: P.dir }) : [];
+  const seg = (act, items, cur) => `<div class="seg">${items.map(([v, l]) => `<button data-act="${act}" data-v="${v}" class="${v === cur ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  $('#v-home').innerHTML = `
+  <header class="top">
+    <div><div class="muted small">${esc(fmtDate())}</div><h1>Hey ${esc(me ? me.name : '')} 👋</h1></div>
+    ${syncBadge()}
+  </header>
+  <div class="statrow">
+    <div class="stat"><div class="big">🔥 ${currentStreak(d)}</div><div class="muted small">Tage in Folge</div></div>
+    <div class="stat"><div class="big">⭐ Lvl ${lv.lvl}</div><div class="bar"><i style="width:${pct(lv.cur, lv.need)}%"></i></div><div class="muted small">${lv.cur}/${lv.need} XP</div></div>
+    <div class="stat"><div class="big">🎯 ${tc}/${goal}</div><div class="bar ${tc >= goal ? 'done' : ''}"><i style="width:${pct(tc, goal)}%"></i></div><div class="muted small">heute</div></div>
+  </div>
+  <div class="label">Sprache</div>
+  ${seg('lang', Object.entries(LANGS).map(([k, l]) => [k, l.flag + ' ' + esc(l.name)]), P.lang)}
+  <div class="label">Unit</div>
+  <div class="chips">${['*', ...units].map(u => `<button data-act="unit" data-v="${esc(u)}" class="chip ${u === P.unit ? 'on' : ''}">${u === '*' ? 'Alle' : esc(u)}</button>`).join('')}</div>
+  <div class="label">Richtung</div>
+  ${seg('dir', [['fd', code + ' → DE'], ['df', 'DE → ' + code], ['mix', 'Gemischt']], P.dir)}
+  <div class="label">Abfrage</div>
+  ${seg('mode', [['type', '⌨️ Tippen'], ['mc', '🔘 Auswahl'], ['flip', '🃏 Karte']], P.mode)}
+  ${total === 0 ? `
+    <div class="card empty"><div class="e">📭</div><h3>Noch keine ${esc(L.name)}-Vokabeln</h3>
+    <p class="muted small">Im Eltern-Bereich 🔒 können Vokabeln importiert werden.</p></div>` : `
+    <button class="cta" data-act="start" ${q.length ? '' : 'disabled'}>${q.length ? `Los geht's · ${q.length} Karten` : 'Alles erledigt für heute 🎉'}</button>
+    <button class="btn ghost wide" data-act="start-test">📝 Alle ${total} üben (Test-Modus)</button>
+    <p class="muted small" style="text-align:center;margin-top:10px">Im Test-Modus wird alles abgefragt – ideal vor Klassenarbeiten.</p>`}`;
+}
+
+/* ============================================================
+   Lernrunde
+   ============================================================ */
+const cur = () => SES.queue[SES.i];
+function startSession(src) {
+  const d = AD(); if (!d) return;
+  const P = S.prefs, test = src === 'test', practice = test || Array.isArray(src);
+  const q = Array.isArray(src) ? shuffle(src.slice()) : buildQueue(d, { lang: P.lang, unit: P.unit, dir: P.dir, test });
+  if (!q.length) return toast('Keine Karten verfügbar');
+  SES = { d, queue: q.map(x => ({ card: x.card, dir: x.dir })), i: 0, combo: 0, xp: 0, mode: P.mode, practice };
+  show('session');
+}
+function mcOptions(it) {
+  const fd = it.dir === 'fd', c = it.card;
+  const ansOf = v => fd ? v.translation : v.term;
+  const correct = ansOf(c), seen = new Set([norm(correct)]), out = [correct];
+  const pool = shuffle(SES.d.vocab.filter(v => v.lang === c.lang && v.id !== c.id));
+  pool.sort((a, b) => (b.unit === c.unit) - (a.unit === c.unit));
+  for (const v of pool) {
+    const a = ansOf(v), k = norm(a);
+    if (!k || seen.has(k)) continue;
+    seen.add(k); out.push(a);
+    if (out.length === 4) break;
+  }
+  return shuffle(out);
+}
+function renderQ() {
+  if (!SES) return show('home');
+  const it = cur(), c = it.card, fd = it.dir === 'fd', L = LANGS[c.lang] || {};
+  document.body.dataset.lang = c.lang;
+  let mode = SES.mode;
+  if (mode === 'mc') { it.opts = it.opts || mcOptions(it); if (it.opts.length < 4) mode = 'flip'; }
+  it.modeUsed = mode;
+  const n = SES.queue.length;
+  $('#v-session').innerHTML = `
+  <div class="sesstop">
+    <button class="icon" data-act="quit" aria-label="Beenden">✕</button>
+    <div class="bar"><i style="width:${pct(SES.i, n)}%"></i></div>
+    <div class="small muted">${SES.i + 1}/${n}</div>
+  </div>
+  ${SES.combo >= 3 ? `<div class="combo">🔥 ${SES.combo}er-Serie!</div>` : ''}
+  <div class="qcard ${it.retry ? 'retry' : ''}">
+    <div class="qmeta">${L.flag || ''} ${fd ? esc(L.name) + ' → Deutsch' : 'Deutsch → ' + esc(L.name)} · ${esc(c.unit)}${it.retry ? ' · nochmal' : ''}${SES.practice ? ' · Übung' : ''}</div>
+    <div class="prompt">${esc(promptOf(it))}</div>
+    ${fd && L.speech ? `<button class="icon speak" data-act="speak" data-t="${esc(c.term)}" data-l="${c.lang}" aria-label="Vorlesen">🔊</button>` : ''}
+  </div>
+  <div id="ans"></div>
+  <div id="fb"></div>`;
+  const ans = $('#ans');
+  if (mode === 'type') {
+    const acc = !fd && c.lang === 'fr' ? ['é', 'è', 'ê', 'à', 'â', 'ç', 'ô', 'î', 'û', 'ù', 'ë', 'ï', 'œ'] : [];
+    ans.innerHTML = `
+    <form id="tf" class="typeform" autocomplete="off">
+      <input id="ti" type="text" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="done" placeholder="${fd ? 'Auf Deutsch …' : 'Auf ' + esc(L.name) + ' …'}">
+      ${acc.length ? `<div class="accbar">${acc.map(a => `<button type="button" data-act="acc" data-c="${a}">${a}</button>`).join('')}</div>` : ''}
+      <div class="row" id="trow"><button type="button" class="btn ghost" data-act="dunno">Weiß ich nicht</button><button class="btn primary grow" type="submit">Prüfen</button></div>
+    </form>`;
+    setTimeout(() => { const i = $('#ti'); if (i) i.focus(); }, 60);
+  } else if (mode === 'mc') {
+    ans.innerHTML = `<div class="mc">${it.opts.map((o, i) => `<button data-act="mc" data-i="${i}">${esc(o)}</button>`).join('')}</div>`;
+  } else {
+    ans.innerHTML = `<button class="btn primary wide" data-act="flip">Aufdecken</button>`;
+  }
+  if (fd && L.speech && S.prefs.autoSpeak) speak(c.term, c.lang);
+}
+function applyAnswer(ok) {
+  const it = cur(), d = SES.d;
+  it.answered = true; it.ok = ok; it.prevCombo = SES.combo;
+  SES.combo = ok ? SES.combo + 1 : 0;
+  if (!it.retry) {
+    if (!SES.practice) {
+      const k = pkey(it.card.id, it.dir);
+      it.before = d.progress[k] ? Object.assign({}, d.progress[k]) : null;
+      it.wasDirty = d.dirty.has(k);
+      grade(d, it.card, it.dir, ok);
+    }
+    if (!ok) { it.retryRef = { card: it.card, dir: it.dir, retry: true }; SES.queue.splice(Math.min(SES.i + 3, SES.queue.length), 0, it.retryRef); }
+  }
+  const st = d.state, t = dayStr();
+  if (!st.today || st.today.day !== t) st.today = { day: t, count: 0 };
+  st.today.count++;
+  if (st.lastDay !== t) { st.streak = st.lastDay === addDays(-1) ? (st.streak || 0) + 1 : 1; st.lastDay = t; }
+  it.gain = ok ? (it.retry ? 2 : SES.practice ? 5 : 10 + (SES.combo >= 5 ? 5 : 0)) : 0;
+  st.xp = (st.xp || 0) + it.gain; SES.xp += it.gain;
+  touchState(d); saveData(d);
+}
+function overrideCorrect() {
+  const it = cur(), d = SES.d; if (!it.answered || it.ok) return;
+  if (!it.retry) {
+    if (!SES.practice) {
+      const k = pkey(it.card.id, it.dir);
+      if (it.before) d.progress[k] = it.before; else delete d.progress[k];
+      if (!it.wasDirty) d.dirty.delete(k);
+      grade(d, it.card, it.dir, true);
+    }
+    const idx = SES.queue.indexOf(it.retryRef); if (idx > -1) SES.queue.splice(idx, 1);
+  }
+  it.ok = true; SES.combo = (it.prevCombo || 0) + 1;
+  it.gain = it.retry ? 2 : SES.practice ? 5 : 10;
+  d.state.xp = (d.state.xp || 0) + it.gain; SES.xp += it.gain;
+  touchState(d); saveData(d);
+  renderFeedback({ overridden: true });
+}
+function answerType(dunno) {
+  const it = cur(); if (it.answered) return;
+  const inp = $('#ti'); const val = dunno ? '' : inp.value;
+  if (!dunno && !val.trim()) { inp.focus(); return; }
+  const r = dunno ? { ok: false } : check(val, answerOf(it));
+  applyAnswer(r.ok);
+  inp.disabled = true; inp.blur(); $('#trow').hidden = true;
+  const ab = $('.accbar'); if (ab) ab.hidden = true;
+  renderFeedback({ given: dunno ? null : val, hint: r.hint, near: r.near });
+}
+function answerMC(i) {
+  const it = cur(); if (it.answered) return;
+  const chosen = it.opts[i], right = answerOf(it), ok = chosen === right;
+  applyAnswer(ok);
+  $$('.mc button').forEach((b, j) => { b.disabled = true; if (it.opts[j] === right) b.classList.add('right'); else if (j === i) b.classList.add('wrong'); });
+  renderFeedback({});
+}
+function revealFlip() {
+  const it = cur();
+  $('#ans').innerHTML = `<div class="reveal">${esc(answerOf(it))}</div>
+    <div class="row"><button class="btn danger grow" data-act="notknow">✗ Nicht gewusst</button><button class="btn primary grow" data-act="know">✓ Gewusst</button></div>`;
+  if (it.dir === 'df' && S.prefs.autoSpeak) speak(it.card.term, it.card.lang);
+}
+function flipAnswer(ok) {
+  const it = cur(); if (it.answered) return;
+  applyAnswer(ok);
+  $('#ans').innerHTML = `<div class="reveal">${esc(answerOf(it))}</div>`;
+  renderFeedback({});
+}
+function renderFeedback(info) {
+  const it = cur(), c = it.card, fd = it.dir === 'fd', L = LANGS[c.lang] || {};
+  if (info.given !== undefined) it.fbInfo = info; else info = Object.assign({}, it.fbInfo || {}, info);
+  const head = it.ok ? (info.overridden ? 'Okay, zählt als richtig ✅' : pick(['Richtig! ✅', 'Stark! 💪', 'Genau! 🎯', 'Top! ⭐', 'Sauber! 🚀']))
+    : (info.near ? 'Knapp daneben 🤏' : 'Leider falsch ❌');
+  const showSol = it.modeUsed === 'type';
+  $('#fb').innerHTML = `
+  <div class="fb ${it.ok ? 'ok' : 'bad'}">
+    <div class="fbhead">${head}${it.gain ? `<span class="xp">+${it.gain} XP</span>` : ''}</div>
+    ${showSol || !it.ok ? `<div class="small muted">${it.ok ? 'Lösung' : 'Richtig wäre'}:</div>
+      <div class="sol">${esc(answerOf(it))}${!fd && L.speech ? `<button class="icon" data-act="speak" data-t="${esc(c.term)}" data-l="${c.lang}">🔊</button>` : ''}</div>` : ''}
+    ${info.given && !it.ok ? `<div class="given">Deine Antwort: <s>${esc(info.given)}</s></div>` : ''}
+    ${info.hint ? `<div class="hint">💡 ${esc(info.hint)}</div>` : ''}
+    ${c.note ? `<div class="note">${esc(c.note)}</div>` : ''}
+    <div class="row">
+      ${!it.ok && it.modeUsed === 'type' && info.given ? `<button class="btn ghost" data-act="override">Ich hatte recht</button>` : ''}
+      <button class="btn primary grow" data-act="next">Weiter →</button>
+    </div>
+  </div>`;
+  if (!fd && L.speech && S.prefs.autoSpeak && it.modeUsed !== 'flip') speak(c.term, c.lang);
+  setTimeout(() => { const f = $('#fb'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, 30);
+}
+function nextQ() {
+  if (!SES || !cur().answered) return;
+  SES.i++;
+  if (SES.i >= SES.queue.length) finish();
+  else { renderQ(); window.scrollTo(0, 0); }
+}
+function finish() {
+  const first = SES.queue.filter(x => !x.retry && x.answered);
+  if (!first.length) { SES = null; show('home'); sync(); return; }
+  SES.summary = {
+    n: first.length, ok: first.filter(x => x.ok).length, xp: SES.xp, practice: SES.practice,
+    wrong: first.filter(x => !x.ok).map(x => ({ card: x.card, dir: x.dir }))
+  };
+  show('done'); sync();
+}
+function renderDone() {
+  if (!SES || !SES.summary) return show('home');
+  const d = SES.d, sm = SES.summary, r = sm.n ? sm.ok / sm.n : 0;
+  const e = r === 1 ? '🏆' : r >= .8 ? '🎉' : r >= .5 ? '💪' : '🌱';
+  const msg = r === 1 ? 'Perfekte Runde!' : r >= .8 ? 'Richtig stark!' : r >= .5 ? 'Gut gemacht – dranbleiben!' : 'Jeder Fehler ist ein Lernschritt.';
+  const tc = todayCount(d), goal = d.state.goal || 20, sk = currentStreak(d);
+  $('#v-done').innerHTML = `
+  <div class="done">
+    <div class="e">${e}</div>
+    <div class="score">${sm.ok}/${sm.n}</div>
+    <h2>${msg}</h2>
+    <p><span class="xp" style="font-size:15px;margin:0">+${sm.xp} XP</span></p>
+    <p class="muted">${tc >= goal ? '🎯 Tagesziel geschafft!' : `🎯 Noch ${goal - tc} bis zum Tagesziel`} · 🔥 ${sk} ${sk === 1 ? 'Tag' : 'Tage'} in Folge</p>
+  </div>
+  ${sm.wrong.length ? `<div class="card"><h3>Das üben wir nochmal</h3>
+    ${sm.wrong.map(w => `<div class="wl"><span><b>${esc(w.dir === 'fd' ? w.card.term : w.card.translation)}</b></span><span>${esc(w.dir === 'fd' ? w.card.translation : w.card.term)}</span></div>`).join('')}
+  </div>
+  <button class="btn primary wide" data-act="retry-wrong">🔁 Fehler gleich nochmal üben</button>` : ''}
+  <button class="btn ghost wide" style="margin-top:10px" data-act="home">Fertig</button>`;
+}
+
+/* ============================================================
+   Statistik
+   ============================================================ */
+const BOXC = ['#94a3b8', '#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
+const BOXL = ['Neu', 'Fach 1', 'Fach 2', 'Fach 3', 'Fach 4', 'Gelernt'];
+function renderStats() {
+  const d = SD();
+  document.body.dataset.lang = '';
+  if (!d) { $('#v-stats').innerHTML = `<header class="top"><h1>Statistik</h1>${syncBadge()}</header><div class="card empty"><p class="muted">Noch kein Lernprofil vorhanden.</p></div>`; return; }
+  const st = d.state, lv = levelInfo(st.xp || 0), me = learner(d.lid);
+  let c = 0, w = 0; Object.values(d.progress).forEach(p => { c += p.correct || 0; w += p.wrong || 0; });
+  let html = `<header class="top"><div><div class="muted small">Statistik</div><h1>${esc(me ? me.name : '')}</h1></div>${syncBadge()}</header>
+  ${learnerChips('slearner', d.lid)}
+  <div class="kpis">
+    <div class="stat"><div class="big">⭐ Level ${lv.lvl}</div><div class="muted small">${st.xp || 0} XP gesamt</div></div>
+    <div class="stat"><div class="big">🔥 ${currentStreak(d)}</div><div class="muted small">Tage in Folge</div></div>
+    <div class="stat"><div class="big">✍️ ${c + w}</div><div class="muted small">Antworten gesamt</div></div>
+    <div class="stat"><div class="big">🎯 ${pct(c, c + w)} %</div><div class="muted small">Trefferquote</div></div>
+  </div>`;
+  let any = false;
+  for (const [lang, L] of Object.entries(LANGS)) {
+    const cards = d.vocab.filter(v => v.lang === lang);
+    if (!cards.length) continue;
+    any = true;
+    const box = [0, 0, 0, 0, 0, 0];
+    for (const v of cards) for (const dr of ['fd', 'df']) { const p = prog(d, v.id, dr); box[p ? p.box : 0]++; }
+    const items = cards.length * 2;
+    const units = unitsOf(d, lang).map(u => {
+      const cs = cards.filter(v => v.unit === u);
+      let sum = 0; cs.forEach(v => ['fd', 'df'].forEach(dr => { const p = prog(d, v.id, dr); sum += p ? p.box : 0; }));
+      return [u, pct(sum, cs.length * 10)];
+    });
+    const hard = cards.map(v => ({ v, wr: ['fd', 'df'].reduce((s, dr) => s + ((prog(d, v.id, dr) || {}).wrong || 0), 0) }))
+      .filter(x => x.wr > 0).sort((a, b) => b.wr - a.wr).slice(0, 5);
+    html += `<div class="card">
+      <h3>${L.flag} ${esc(L.name)} <span class="muted small">· ${cards.length} Vokabeln</span></h3>
+      <div class="stack">${box.map((n, i) => n ? `<i style="width:${n / items * 100}%;background:${BOXC[i]}"></i>` : '').join('')}</div>
+      <div class="legend">${box.map((n, i) => `<span style="--c:${BOXC[i]}">${BOXL[i]} ${n}</span>`).join('')}</div>
+      <div class="label" style="margin-top:14px">Units</div>
+      ${units.map(([u, p]) => `<div class="urow"><span class="n">${esc(u)}</span><div class="bar ${p >= 100 ? 'done' : ''}"><i style="width:${p}%"></i></div><span class="p">${p} %</span></div>`).join('')}
+      ${hard.length ? `<div class="label" style="margin-top:14px">Knifflige Wörter</div>
+        ${hard.map(x => `<div class="wl"><span><b>${esc(x.v.term)}</b> – ${esc(x.v.translation)}</span><span>${x.wr}× falsch</span></div>`).join('')}` : ''}
+    </div>`;
+  }
+  if (!any) html += `<div class="card empty"><div class="e">📊</div><p class="muted">Sobald Vokabeln da sind und gelernt wird, erscheint hier der Fortschritt.</p></div>`;
+  html += `<p class="muted small" style="text-align:center">Jede Vokabel wird in beide Richtungen gelernt. Richtig → ein Fach weiter, falsch → zurück in Fach 1.</p>`;
+  $('#v-stats').innerHTML = html;
+}
+
+/* ============================================================
+   Eltern-Bereich
+   ============================================================ */
+function renderParent() {
+  document.body.dataset.lang = S.prefs.lang;
+  if (!UNLOCK) {
+    const setup = !S.prefs.pin;
+    $('#v-parent').innerHTML = `
+    <div class="lock"><div class="e">🔒</div><h1>Eltern-Bereich</h1>
+      <p class="muted">${setup ? 'Lege eine PIN (4–6 Ziffern) fest. Sie gilt nur auf diesem Gerät.' : 'Bitte PIN eingeben.'}</p></div>
+    <form id="pinf" class="card">
+      <div class="f"><input id="pin1" class="field pinin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="PIN"></div>
+      ${setup ? `<div class="f"><input id="pin2" class="field pinin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="wiederholen"></div>` : ''}
+      <button class="btn primary wide" type="submit">${setup ? 'PIN festlegen' : 'Entsperren'}</button>
+    </form>`;
+    setTimeout(() => { const p = $('#pin1'); if (p) p.focus(); }, 60);
+    return;
+  }
+  const d = PD();
+  if (!d && PTAB !== 'settings') PTAB = 'settings';
+  const tabs = [['import', '➕ Import'], ['list', '📋 Vokabeln'], ['settings', '⚙️ Einstellungen']];
+  $('#v-parent').innerHTML = `
+  <header class="top"><h1>Eltern-Bereich</h1><button class="pill" data-act="lock">🔒 Sperren</button></header>
+  ${PTAB !== 'settings' ? `<div class="label" style="margin-top:0">Für welches Kind?</div>${learnerChips('plearner', d && d.lid) || `<p class="small muted" style="margin:0 4px 12px">👤 ${esc((learner(d.lid) || {}).name || '')}</p>`}` : ''}
+  <div class="seg" style="margin-bottom:16px">${tabs.map(([v, l]) => `<button data-act="ptab" data-v="${v}" class="${PTAB === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+  <div id="pbody"></div>`;
+  ({ import: renderImport, list: renderList, settings: renderSettings })[PTAB]();
+}
+function doPin() {
+  const p1 = $('#pin1').value.trim();
+  if (!S.prefs.pin) {
+    if (!/^\d{4,6}$/.test(p1)) return toast('PIN muss 4–6 Ziffern haben', true);
+    if (p1 !== $('#pin2').value.trim()) return toast('PINs stimmen nicht überein', true);
+    S.prefs.pin = p1; savePrefs(); UNLOCK = true; toast('PIN gespeichert');
+  } else {
+    if (p1 !== S.prefs.pin) { $('#pin1').value = ''; return toast('Falsche PIN', true); }
+    UNLOCK = true;
+  }
+  renderParent(); sync();
+}
+
+/* ---------- Import ---------- */
+function parseLines(text, swap) {
+  const ok = [], bad = [];
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim(); if (!line) continue;
+    let parts = null;
+    if (line.includes('\t')) parts = line.split('\t');
+    else if (line.includes(';')) parts = line.split(';');
+    else { const m = line.split(/\s+[–—-]\s+|\s*=\s*|\s{2,}/); if (m.length >= 2) parts = m; }
+    parts = parts ? parts.map(s => s.trim()).filter(Boolean) : null;
+    if (!parts || parts.length < 2) { bad.push(line); continue; }
+    let [a, b, ...rest] = parts;
+    if (swap) [a, b] = [b, a];
+    ok.push({ term: a, translation: b, note: rest.join('; ') || null });
+  }
+  return { ok, bad };
+}
+function renderImport() {
+  const d = PD();
+  if (IMP.lid !== d.lid) { IMP.lid = d.lid; IMP.unit = null; }
+  if (!IMP.lang || !LANGS[IMP.lang]) IMP.lang = S.prefs.lang;
+  const units = unitsOf(d, IMP.lang);
+  if (IMP.unit === null || (IMP.unit !== '__new' && !units.includes(IMP.unit))) IMP.unit = units.length ? units[units.length - 1] : '__new';
+  $('#pbody').innerHTML = `
+  <div class="card">
+    <div class="f"><label>Sprache</label><select id="ilang" class="field">${langOpts(IMP.lang)}</select></div>
+    <div class="f"><label>Unit / Lektion</label><select id="iunit" class="field">
+      ${units.map(u => `<option value="${esc(u)}" ${u === IMP.unit ? 'selected' : ''}>${esc(u)}</option>`).join('')}
+      <option value="__new" ${IMP.unit === '__new' ? 'selected' : ''}>➕ Neue Unit …</option></select></div>
+    <div class="f" id="inewwrap" ${IMP.unit === '__new' ? '' : 'hidden'}><input id="inewunit" class="field" placeholder="z. B. Unit 4 oder Lektion 12" value="${esc(IMP.newUnit)}"></div>
+    <div class="f"><label>Vokabeln – eine pro Zeile</label>
+      <textarea id="itext" class="field" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="apple ; Apfel&#10;to look after ; sich kümmern um&#10;puella ; Mädchen ; -ae f.">${esc(IMP.text)}</textarea></div>
+    <label class="check"><input type="checkbox" id="iswap" ${IMP.swap ? 'checked' : ''}> Deutsch steht links (Spalten tauschen)</label>
+    <div id="iprev" class="prev"></div>
+    <button class="btn primary wide" data-act="imp-add">Hinzufügen für ${esc((learner(d.lid) || {}).name || '')}</button>
+  </div>
+  <div class="card small muted">
+    💡 <b>Format:</b> Fremdsprache ; Deutsch ; Notiz (optional). Statt „;“ gehen auch Tab, „=“ oder „ – “. Mehrere richtige Bedeutungen mit Komma trennen.<br><br>
+    📷 <b>Schnell-Import:</b> Vokabelseite fotografieren, Text im Foto lange drücken (Live Text) → „Alles auswählen“ → kopieren → hier einfügen. Oder das Foto an Claude schicken und die fertige Liste hier einfügen.
+  </div>`;
+  updatePreview();
+}
+function updatePreview() {
+  const el = $('#iprev'); if (!el) return;
+  if (!IMP.text.trim()) { el.innerHTML = ''; return; }
+  const { ok, bad } = parseLines(IMP.text, IMP.swap);
+  el.innerHTML = `<b>${ok.length}</b> Vokabeln erkannt${ok.length ? ` – z. B. <i>${esc(ok[0].term)}</i> → <i>${esc(ok[0].translation)}</i>` : ''}
+    ${bad.length ? `<div class="badl">⚠️ ${bad.length} Zeile(n) nicht erkannt: ${bad.slice(0, 3).map(b => '„' + esc(b) + '“').join(', ')}${bad.length > 3 ? ' …' : ''}</div>` : ''}`;
+}
+async function doImport() {
+  const d = PD(), lang = IMP.lang;
+  const unit = (IMP.unit === '__new' ? IMP.newUnit : IMP.unit || '').trim();
+  if (!unit) return toast('Bitte einen Namen für die Unit angeben', true);
+  const { ok } = parseLines(IMP.text, IMP.swap);
+  if (!ok.length) return toast('Keine Vokabeln erkannt', true);
+  const existing = new Set(d.vocab.filter(v => v.lang === lang && v.unit === unit).map(v => norm(v.term) + '|' + norm(v.translation)));
+  const base = Date.now(), list = []; let dup = 0;
+  ok.forEach((r, i) => {
+    const k = norm(r.term) + '|' + norm(r.translation);
+    if (existing.has(k)) { dup++; return; }
+    existing.add(k);
+    list.push({ id: uuid(), lang, unit, term: r.term, translation: r.translation, note: r.note, created_at: new Date(base + i).toISOString() });
+  });
+  const btn = $('[data-act="imp-add"]'); btn.disabled = true;
+  try {
+    await vocabInsert(d, list);
+    IMP.text = ''; IMP.unit = unit; IMP.newUnit = '';
+    toast(`${list.length} Vokabeln hinzugefügt` + (dup ? ` · ${dup} doppelte übersprungen` : ''));
+    renderImport();
+  } catch (e) {
+    toast('Fehler beim Speichern: ' + e.message, true); btn.disabled = false;
+  }
+}
+
+/* ---------- Vokabeln verwalten ---------- */
+function renderList() {
+  const d = PD();
+  if (!LST.lang || !LANGS[LST.lang]) LST.lang = S.prefs.lang;
+  const units = unitsOf(d, LST.lang);
+  if (LST.unit !== '*' && !units.includes(LST.unit)) LST.unit = '*';
+  $('#pbody').innerHTML = `
+  <div class="card">
+    <div class="row" style="margin-top:0">
+      <select id="llang" class="field grow">${langOpts(LST.lang)}</select>
+      <select id="lunit" class="field grow"><option value="*">Alle Units</option>${units.map(u => `<option value="${esc(u)}" ${u === LST.unit ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select>
+    </div>
+    <input id="lq" class="field" style="margin-top:10px" placeholder="🔍 Suchen …" value="${esc(LST.q)}" autocapitalize="off" autocorrect="off">
+    ${LST.unit !== '*' ? `<div class="row">
+      <button class="btn ghost grow" data-act="unit-rename">✏️ Umbenennen</button>
+      ${S.learners.length > 1 ? `<button class="btn ghost grow" data-act="unit-copy">📤 Kopieren</button>` : ''}
+      <button class="btn danger grow" data-act="unit-del">🗑️ Löschen</button></div>` : ''}
+  </div>
+  <div class="card" id="vlist"></div>`;
+  renderVList();
+}
+function renderVList() {
+  const d = PD(), q = norm(LST.q);
+  let list = cardsFor(d, LST.lang, LST.unit);
+  if (q) list = list.filter(v => norm(v.term).includes(q) || norm(v.translation).includes(q));
+  list.sort((a, b) => collator.compare(a.unit, b.unit) || (a.created_at || '').localeCompare(b.created_at || ''));
+  const shown = list.slice(0, 300);
+  const bx = (id, dr) => { const p = prog(d, id, dr); return p ? p.box : 0; };
+  $('#vlist').innerHTML = list.length ? `
+    <div class="small muted" style="margin-bottom:6px">${list.length} Vokabeln${list.length > 300 ? ' (erste 300 angezeigt – bitte filtern)' : ''} · Tippen zum Bearbeiten · Zahlen = Fach je Richtung</div>
+    ${shown.map(v => `<button class="vrow" data-act="edit" data-id="${v.id}"><b>${esc(v.term)}</b><span>${esc(v.translation)}${v.note ? ' · <i>' + esc(v.note) + '</i>' : ''}</span><span class="boxes" style="flex:none">${bx(v.id, 'fd')}|${bx(v.id, 'df')}</span></button>`).join('')}`
+    : `<p class="muted" style="text-align:center">Keine Vokabeln gefunden.</p>`;
+}
+function openEdit(id) {
+  const v = PD().vocab.find(x => x.id === id); if (!v) return;
+  openModal(`
+  <h2>Vokabel bearbeiten</h2>
+  <div class="f"><label>${esc((LANGS[v.lang] || {}).name || v.lang)}</label><input id="eterm" class="field" value="${esc(v.term)}" autocapitalize="off" autocorrect="off"></div>
+  <div class="f"><label>Deutsch</label><input id="etrans" class="field" value="${esc(v.translation)}" autocapitalize="off" autocorrect="off"></div>
+  <div class="f"><label>Notiz (optional)</label><input id="enote" class="field" value="${esc(v.note || '')}" autocapitalize="off"></div>
+  <div class="f"><label>Unit</label><input id="eunit" class="field" value="${esc(v.unit)}"></div>
+  <div class="row"><button class="btn danger" data-act="edit-del" data-id="${v.id}">🗑️</button><button class="btn ghost grow" data-act="modal-close">Abbrechen</button><button class="btn primary grow" data-act="edit-save" data-id="${v.id}">Speichern</button></div>`);
+}
+async function saveEdit(id) {
+  const f = { term: $('#eterm').value.trim(), translation: $('#etrans').value.trim(), note: $('#enote').value.trim() || null, unit: $('#eunit').value.trim() };
+  if (!f.term || !f.translation || !f.unit) return toast('Bitte alle Pflichtfelder ausfüllen', true);
+  try { await vocabUpdate(PD(), id, f); closeModal(); toast('Gespeichert'); renderList(); }
+  catch (e) { toast('Fehler: ' + e.message, true); }
+}
+async function delVocab(id) {
+  if (!confirm('Diese Vokabel löschen?')) return;
+  try { await vocabDelete(PD(), id); closeModal(); toast('Gelöscht'); renderList(); }
+  catch (e) { toast('Fehler: ' + e.message, true); }
+}
+
+/* ---------- Einstellungen ---------- */
+function renderSettings() {
+  const d = PD();
+  const devSel = [...S.learners.map(l => [l.id, '👤 ' + l.name]), [PARENT, '👨‍👩‍👧 Nur Eltern-Gerät']];
+  $('#pbody').innerHTML = `
+  <div class="card">
+    <h3>Kinder</h3>
+    ${S.learners.map(l => `<div class="wl" style="align-items:center"><span><b>👤 ${esc(l.name)}</b></span>
+      <span class="row" style="margin:0;flex-wrap:nowrap"><button class="pill" data-act="l-rename" data-id="${l.id}">✏️</button><button class="pill" data-act="l-del" data-id="${l.id}">🗑️</button></span></div>`).join('') || '<p class="muted small">Noch kein Profil angelegt.</p>'}
+    <form id="nlf2" class="row"><input id="nln2" class="field grow" placeholder="Vorname" maxlength="30" autocomplete="off"><button class="btn primary" type="submit">➕ Kind</button></form>
+  </div>
+  <div class="card">
+    <h3>Dieses Gerät</h3>
+    <div class="f"><label>Wer lernt auf diesem Gerät?</label><select id="sdev" class="field">${devSel.map(([v, l]) => `<option value="${v}" ${v === S.prefs.learner ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+    <label class="check"><input type="checkbox" id="sauto" ${S.prefs.autoSpeak ? 'checked' : ''}> Vokabeln automatisch vorlesen</label>
+  </div>
+  ${d ? `<div class="card">
+    <h3>Tagesziel für ${esc((learner(d.lid) || {}).name || '')}</h3>
+    ${learnerChips('plearner', d.lid)}
+    <div class="row" style="margin-top:0"><select id="sgoal" class="field grow">${[10, 15, 20, 30, 40, 50].map(n => `<option ${n === (d.state.goal || 20) ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" data-act="goal-save">Speichern</button></div>
+    <p class="small muted">Karten pro Tag</p>
+  </div>` : ''}
+  <div class="card">
+    <h3>Synchronisation</h3>
+    <p class="small muted" style="margin-top:0">${CLOUD
+      ? `☁️ Cloud-Modus · angemeldet als ${esc((S.auth && S.auth.email) || '–')}<br>Letzter Abgleich: ${S.prefs.lastSync ? new Date(S.prefs.lastSync).toLocaleString('de-DE') : 'noch nie'}${SYNC.s === 'err' ? '<br>⚠️ ' + esc(SYNC.msg) : ''}`
+      : '📱 Lokaler Testmodus – alle Daten liegen nur auf diesem Gerät. Für die Cloud-Synchronisation config.js ausfüllen.'}</p>
+    ${CLOUD ? `<div class="row"><button class="btn grow" data-act="sync-now">🔄 Jetzt abgleichen</button><button class="btn ghost" data-act="logout">Abmelden</button></div>` : ''}
+  </div>
+  <div class="card">
+    <h3>Sicherung</h3>
+    <p class="small muted" style="margin-top:0">Alle Profile mit Vokabeln und Lernstand als Datei sichern oder wiederherstellen.</p>
+    <div class="row"><button class="btn grow" data-act="export">⬇️ Exportieren</button><button class="btn grow" data-act="import-file">⬆️ Importieren</button></div>
+  </div>
+  <div class="card"><h3>Sicherheit</h3><button class="btn ghost wide" data-act="pin-change">PIN ändern</button></div>
+  <p class="muted small" style="text-align:center">Vokabeltrainer ${VERSION}</p>`;
+}
+async function addLearnerFromSettings() {
+  const name = $('#nln2').value.trim(); if (!name) return;
+  try {
+    const l = await learnerAdd(name);
+    if (!S.prefs.plearner || !learner(S.prefs.plearner)) S.prefs.plearner = l.id;
+    savePrefs(); toast(name + ' angelegt'); renderParent();
+  } catch (e) { toast('Fehler: ' + e.message, true); }
+}
+async function exportBackup() {
+  if (CLOUD) await sync();
+  const learnersData = S.learners.map(l => { const d = data(l.id); return { id: l.id, name: l.name, created_at: l.created_at, vocab: d.vocab, progress: d.progress, state: d.state }; });
+  const out = { app: 'vokabeltrainer', version: 2, exported: nowIso(), learners: learnersData };
+  const blob = new Blob([JSON.stringify(out)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'vokabeltrainer-sicherung-' + dayStr() + '.json';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  if (CLOUD) toast('Hinweis: Sicherung enthält die zuletzt abgeglichenen Daten');
+}
+async function importBackup(file) {
+  try {
+    const j = JSON.parse(await file.text());
+    if (!j || !Array.isArray(j.learners)) throw new Error('Keine gültige Sicherungsdatei');
+    let nv = 0, np = 0;
+    for (const bl of j.learners) {
+      if (!bl || !bl.id) continue;
+      if (!learner(bl.id)) {
+        const l = { id: bl.id, name: bl.name || 'Kind', created_at: bl.created_at || nowIso() };
+        if (CLOUD) await API.req('learners', { method: 'POST', body: l, prefer: 'resolution=ignore-duplicates,return=minimal' });
+        S.learners.push(l); sortLearners(); saveLearners();
+      }
+      const d = data(bl.id);
+      const have = new Set(d.vocab.map(v => v.id));
+      const add = (bl.vocab || []).filter(v => v && v.id && v.term && v.translation && !have.has(v.id))
+        .map(v => ({ id: v.id, lang: v.lang, unit: v.unit || 'Import', term: v.term, translation: v.translation, note: v.note || null, created_at: v.created_at || nowIso() }));
+      await vocabInsert(d, add); nv += add.length;
+      for (const [k, p] of Object.entries(bl.progress || {})) {
+        const l = d.progress[k];
+        if (p && (!l || ts(p.updated_at) > ts(l.updated_at))) { d.progress[k] = p; d.dirty.add(k); np++; }
+      }
+      if (bl.state) { d.state = mergeState(d.state, bl.state); touchState(d); }
+      saveData(d);
+      if (CLOUD) await syncLearner(d);
+    }
+    toast(`Wiederhergestellt: ${nv} Vokabeln, ${np} Lernstände`);
+    if (VIEW === 'parent') renderParent();
+  } catch (e) { toast('Import fehlgeschlagen: ' + e.message, true); }
+}
+
+/* ============================================================
+   Ereignisse
+   ============================================================ */
+const ACT = {
+  go: el => show(el.dataset.v),
+  home: () => { SES = null; show('home'); },
+  pick: el => pickLearner(el.dataset.v),
+  lang: el => { S.prefs.lang = el.dataset.v; S.prefs.unit = '*'; savePrefs(); renderHome(); },
+  unit: el => { S.prefs.unit = el.dataset.v; savePrefs(); renderHome(); },
+  dir: el => { S.prefs.dir = el.dataset.v; savePrefs(); renderHome(); },
+  mode: el => { S.prefs.mode = el.dataset.v; savePrefs(); renderHome(); },
+  start: () => startSession(),
+  'start-test': () => startSession('test'),
+  'retry-wrong': () => { const w = SES.summary.wrong; SES.d = AD(); startSession(w); },
+  speak: el => speak(el.dataset.t, el.dataset.l),
+  quit: () => { if (confirm('Runde beenden? Alles bis hier ist gespeichert.')) finish(); },
+  dunno: () => answerType(true),
+  acc: el => { const i = $('#ti'); if (!i || i.disabled) return; const s = i.selectionStart ?? i.value.length, e = i.selectionEnd ?? s; i.value = i.value.slice(0, s) + el.dataset.c + i.value.slice(e); i.setSelectionRange(s + 1, s + 1); i.focus(); },
+  mc: el => answerMC(+el.dataset.i),
+  flip: () => revealFlip(),
+  know: () => flipAnswer(true),
+  notknow: () => flipAnswer(false),
+  override: () => overrideCorrect(),
+  next: () => nextQ(),
+  'sync-now': () => { if (!CLOUD) return toast('Lokaler Testmodus – keine Cloud eingerichtet'); sync(true); },
+  slearner: el => { S.prefs.slearner = el.dataset.v; savePrefs(); renderStats(); sync(); },
+  plearner: el => { S.prefs.plearner = el.dataset.v; savePrefs(); LST.unit = '*'; renderParent(); sync(); },
+  lock: () => { UNLOCK = false; renderParent(); },
+  ptab: el => { PTAB = el.dataset.v; renderParent(); },
+  'imp-add': () => doImport(),
+  edit: el => openEdit(el.dataset.id),
+  'edit-save': el => saveEdit(el.dataset.id),
+  'edit-del': el => delVocab(el.dataset.id),
+  'modal-close': () => closeModal(),
+  'unit-rename': async () => {
+    const n = (prompt('Neuer Name für „' + LST.unit + '“:', LST.unit) || '').trim();
+    if (!n || n === LST.unit) return;
+    try { await unitRename(PD(), LST.lang, LST.unit, n); LST.unit = n; toast('Umbenannt'); renderList(); } catch (e) { toast('Fehler: ' + e.message, true); }
+  },
+  'unit-del': async () => {
+    const n = cardsFor(PD(), LST.lang, LST.unit).length;
+    if (!confirm(`„${LST.unit}“ mit ${n} Vokabeln und dem zugehörigen Lernstand endgültig löschen?`)) return;
+    try { await unitDelete(PD(), LST.lang, LST.unit); LST.unit = '*'; toast('Unit gelöscht'); renderList(); } catch (e) { toast('Fehler: ' + e.message, true); }
+  },
+  'unit-copy': () => {
+    const from = PD();
+    openModal(`<h2>„${esc(LST.unit)}“ kopieren</h2><p class="muted small">Die Vokabeln werden dem anderen Kind hinzugefügt. Der Lernstand startet dort neu.</p>
+      ${S.learners.filter(l => l.id !== from.lid).map(l => `<button class="lbtn" data-act="unit-copy-to" data-v="${l.id}"><span class="av">${esc(l.name.slice(0, 1).toUpperCase())}</span>${esc(l.name)}</button>`).join('')}
+      <button class="btn ghost wide" data-act="modal-close">Abbrechen</button>`);
+  },
+  'unit-copy-to': async el => {
+    try {
+      const to = data(el.dataset.v);
+      if (CLOUD) await syncLearner(to);
+      const n = await unitCopy(PD(), to, LST.lang, LST.unit);
+      closeModal(); toast(`${n} Vokabeln an ${(learner(to.lid) || {}).name} kopiert`);
+    } catch (e) { toast('Fehler: ' + e.message, true); }
+  },
+  'l-rename': async el => {
+    const l = learner(el.dataset.id); if (!l) return;
+    const n = (prompt('Neuer Name:', l.name) || '').trim();
+    if (!n || n === l.name) return;
+    try { await learnerRename(l.id, n); toast('Umbenannt'); renderParent(); } catch (e) { toast('Fehler: ' + e.message, true); }
+  },
+  'l-del': async el => {
+    const l = learner(el.dataset.id); if (!l) return;
+    if (!confirm(`Profil „${l.name}“ mit allen Vokabeln und dem gesamten Lernstand endgültig löschen?`)) return;
+    if (prompt(`Zur Sicherheit bitte „${l.name}“ eintippen:`) !== l.name) return toast('Abgebrochen');
+    try { await learnerDelete(l.id); toast('Profil gelöscht'); renderParent(); } catch (e) { toast('Fehler: ' + e.message, true); }
+  },
+  'goal-save': () => {
+    const d = PD(); if (!d) return;
+    d.state.goal = parseInt($('#sgoal').value, 10) || 20; d.state.settingsAt = nowIso();
+    touchState(d); saveData(d); sync(); toast('Gespeichert');
+  },
+  'pin-change': () => {
+    const p = (prompt('Neue PIN (4–6 Ziffern):') || '').trim();
+    if (!p) return;
+    if (!/^\d{4,6}$/.test(p)) return toast('PIN muss 4–6 Ziffern haben', true);
+    S.prefs.pin = p; savePrefs(); toast('PIN geändert');
+  },
+  export: () => exportBackup(),
+  'import-file': () => $('#bfile').click(),
+  logout: () => { if (!confirm('Abmelden?')) return; S.auth = null; LS.set('auth', null); UNLOCK = false; show('login'); }
+};
+document.addEventListener('pointerdown', e => { if (e.target.closest('[data-act="acc"]')) e.preventDefault(); });
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (el && !el.disabled && ACT[el.dataset.act]) { e.preventDefault(); ACT[el.dataset.act](el, e); return; }
+  if (e.target.id === 'modal') closeModal();
+});
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  const id = e.target.id;
+  if (id === 'tf') answerType(false);
+  else if (id === 'lf') doLogin();
+  else if (id === 'pinf') doPin();
+  else if (id === 'nlf') addLearnerFromPick();
+  else if (id === 'nlf2') addLearnerFromSettings();
+});
+document.addEventListener('input', e => {
+  const id = e.target.id;
+  if (id === 'itext') { IMP.text = e.target.value; updatePreview(); }
+  else if (id === 'inewunit') IMP.newUnit = e.target.value;
+  else if (id === 'lq') { LST.q = e.target.value; renderVList(); }
+});
+document.addEventListener('change', e => {
+  const id = e.target.id, v = e.target.value;
+  if (id === 'ilang') { IMP.lang = v; IMP.unit = null; renderImport(); }
+  else if (id === 'iunit') { IMP.unit = v; $('#inewwrap').hidden = v !== '__new'; if (v === '__new') $('#inewunit').focus(); }
+  else if (id === 'iswap') { IMP.swap = e.target.checked; updatePreview(); }
+  else if (id === 'llang') { LST.lang = v; LST.unit = '*'; renderList(); }
+  else if (id === 'lunit') { LST.unit = v; renderList(); }
+  else if (id === 'sdev') { S.prefs.learner = v; savePrefs(); toast('Gerät zugeordnet'); sync(); }
+  else if (id === 'sauto') { S.prefs.autoSpeak = e.target.checked; savePrefs(); }
+  else if (id === 'bfile') { const f = e.target.files[0]; e.target.value = ''; if (f) importBackup(f); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || VIEW !== 'session' || !SES) return;
+  const a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'BUTTON')) return;
+  if (cur().answered) { e.preventDefault(); nextQ(); }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  sync();
+  if (VIEW === 'home') renderHome();
+});
+window.addEventListener('online', () => sync());
+
+/* ============================================================
+   Start
+   ============================================================ */
+if ('speechSynthesis' in window) { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); }
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(e => console.warn(e));
+show(CLOUD && !S.auth ? 'login' : (S.prefs.learner ? 'home' : 'pick'));
+sync();
+</script>
+</body>
+</html>
