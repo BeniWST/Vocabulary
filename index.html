@@ -154,7 +154,7 @@ textarea.field{min-height:180px;font-size:16px;resize:vertical;line-height:1.5}
 const C = window.VT_CONFIG || {};
 const LANGS = C.languages || { en: { name: 'Englisch', flag: '🇬🇧', speech: 'en-GB' } };
 const CLOUD = !!(C.supabaseUrl && C.supabaseKey);
-const VERSION = '1.1';
+const VERSION = '1.2';
 const PARENT = '__parent';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -312,7 +312,7 @@ function buildQueue(d, { lang, unit, dir, test }) {
 /* ============================================================
    Antwort prüfen
    ============================================================ */
-const ART = /^(?:(?:to|the|a|an|der|die|das|ein|eine|einen|le|la|les|un|une|des|du)\s+|l')/;
+const ART = /^(?:(?:to|the|a|an|der|die|das|ein|eine|einen|le|la|les|un|une|des|du|sich)\s+|l')/;
 function norm(s) {
   return String(s || '').normalize('NFC').toLowerCase()
     .replace(/[’`´]/g, "'")
@@ -488,7 +488,13 @@ async function unitCopy(from, to, lang, unit) {
 
 /* ---------- Synchronisation ---------- */
 let SYNC = { s: CLOUD ? 'idle' : 'local', msg: '' };
-let syncing = null;
+let syncing = null, syncAgain = false;
+// Sprache mit vorhandenen Vokabeln bevorzugen, solange keine bewusst gewählt wurde
+function bestLang(d, cur) {
+  if (d && LANGS[cur] && d.vocab.some(v => v.lang === cur)) return cur;
+  const l = d && Object.keys(LANGS).find(k => d.vocab.some(v => v.lang === k));
+  return l || (LANGS[cur] ? cur : Object.keys(LANGS)[0]);
+}
 function syncBadge() {
   const m = { local: ['📱', 'Lokal'], idle: ['☁️', 'Cloud'], sync: ['⏳', 'Sync …'], ok: ['☁️', 'Synchron'], err: ['⚠️', 'Sync-Fehler'], off: ['📴', 'Offline'] }[SYNC.s];
   return `<button id="syncb" class="pill" data-act="sync-now">${m[0]} ${m[1]}</button>`;
@@ -546,13 +552,13 @@ async function syncLearner(d) {
 }
 function sync(manual) {
   if (!CLOUD || !S.auth) return Promise.resolve();
-  if (syncing) return syncing;
+  if (syncing) { syncAgain = true; return syncing; }
   syncing = (async () => {
     setSync('sync');
     try {
       const migrate = await syncLearners();
       let lids = migrate ? S.learners.map(l => l.id)
-        : [S.prefs.learner, VIEW === 'parent' ? S.prefs.plearner : null, VIEW === 'stats' ? S.prefs.slearner : null];
+        : [S.prefs.learner, VIEW === 'parent' ? (PD() || {}).lid : null, VIEW === 'stats' ? (SD() || {}).lid : null];
       lids = [...new Set(lids)].filter(id => id && learner(id));
       for (const id of lids) await syncLearner(data(id));
       if (migrate) await syncLearners();
@@ -566,6 +572,7 @@ function sync(manual) {
     } finally {
       syncing = null;
       afterSync();
+      if (syncAgain) { syncAgain = false; sync(); }
     }
   })();
   return syncing;
@@ -682,7 +689,7 @@ function renderHome() {
     return;
   }
   const P = S.prefs, st = d.state, me = learner(d.lid);
-  if (!LANGS[P.lang]) P.lang = Object.keys(LANGS)[0];
+  if (!P.langChosen || !LANGS[P.lang]) P.lang = bestLang(d, P.lang);
   document.body.dataset.lang = P.lang;
   const units = unitsOf(d, P.lang);
   if (P.unit !== '*' && !units.includes(P.unit)) P.unit = '*';
@@ -1017,7 +1024,7 @@ function parseLines(text, swap) {
 function renderImport() {
   const d = PD();
   if (IMP.lid !== d.lid) { IMP.lid = d.lid; IMP.unit = null; }
-  if (!IMP.lang || !LANGS[IMP.lang]) IMP.lang = S.prefs.lang;
+  if (!IMP.langChosen || !LANGS[IMP.lang]) IMP.lang = bestLang(d, IMP.lang || S.prefs.lang);
   const units = unitsOf(d, IMP.lang);
   if (IMP.unit === null || (IMP.unit !== '__new' && !units.includes(IMP.unit))) IMP.unit = units.length ? units[units.length - 1] : '__new';
   $('#pbody').innerHTML = `
@@ -1074,7 +1081,7 @@ async function doImport() {
 /* ---------- Vokabeln verwalten ---------- */
 function renderList() {
   const d = PD();
-  if (!LST.lang || !LANGS[LST.lang]) LST.lang = S.prefs.lang;
+  if (!LST.langChosen || !LANGS[LST.lang]) LST.lang = bestLang(d, LST.lang || S.prefs.lang);
   const units = unitsOf(d, LST.lang);
   if (LST.unit !== '*' && !units.includes(LST.unit)) LST.unit = '*';
   $('#pbody').innerHTML = `
@@ -1219,7 +1226,7 @@ const ACT = {
   go: el => show(el.dataset.v),
   home: () => { SES = null; show('home'); },
   pick: el => pickLearner(el.dataset.v),
-  lang: el => { S.prefs.lang = el.dataset.v; S.prefs.unit = '*'; savePrefs(); renderHome(); },
+  lang: el => { S.prefs.lang = el.dataset.v; S.prefs.langChosen = true; S.prefs.unit = '*'; savePrefs(); renderHome(); },
   unit: el => { S.prefs.unit = el.dataset.v; savePrefs(); renderHome(); },
   dir: el => { S.prefs.dir = el.dataset.v; savePrefs(); renderHome(); },
   mode: el => { S.prefs.mode = el.dataset.v; savePrefs(); renderHome(); },
@@ -1238,7 +1245,7 @@ const ACT = {
   next: () => nextQ(),
   'sync-now': () => { if (!CLOUD) return toast('Lokaler Testmodus – keine Cloud eingerichtet'); sync(true); },
   slearner: el => { S.prefs.slearner = el.dataset.v; savePrefs(); renderStats(); sync(); },
-  plearner: el => { S.prefs.plearner = el.dataset.v; savePrefs(); LST.unit = '*'; renderParent(); sync(); },
+  plearner: el => { S.prefs.plearner = el.dataset.v; savePrefs(); LST.unit = '*'; LST.langChosen = false; IMP.langChosen = false; renderParent(); sync(); },
   lock: () => { UNLOCK = false; renderParent(); },
   ptab: el => { PTAB = el.dataset.v; renderParent(); },
   'imp-add': () => doImport(),
@@ -1320,10 +1327,10 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const id = e.target.id, v = e.target.value;
-  if (id === 'ilang') { IMP.lang = v; IMP.unit = null; renderImport(); }
+  if (id === 'ilang') { IMP.lang = v; IMP.langChosen = true; IMP.unit = null; renderImport(); }
   else if (id === 'iunit') { IMP.unit = v; $('#inewwrap').hidden = v !== '__new'; if (v === '__new') $('#inewunit').focus(); }
   else if (id === 'iswap') { IMP.swap = e.target.checked; updatePreview(); }
-  else if (id === 'llang') { LST.lang = v; LST.unit = '*'; renderList(); }
+  else if (id === 'llang') { LST.lang = v; LST.langChosen = true; LST.unit = '*'; renderList(); }
   else if (id === 'lunit') { LST.unit = v; renderList(); }
   else if (id === 'sdev') { S.prefs.learner = v; savePrefs(); toast('Gerät zugeordnet'); sync(); }
   else if (id === 'sauto') { S.prefs.autoSpeak = e.target.checked; savePrefs(); }
