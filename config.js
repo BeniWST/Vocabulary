@@ -7,11 +7,11 @@
 // ============================================================
 window.VT_CONFIG = {
   // z. B. "https://abcdefghijklm.supabase.co"
-  supabaseUrl: "",
+  supabaseUrl: "https://ckfueqhanamfzhhhydhk.supabase.co",
 
   // "Publishable key" (sb_publishable_…) bzw. "anon public" Key.
   // Dieser Schlüssel darf öffentlich sein – geschützt wird über Login + Row Level Security.
-  supabaseKey: "",
+  supabaseKey: "sb_publishable_qwocIr6SI9QcaJYUYWq-Kg_6fNRsnIj",
 
   // Sprachen: speech = Stimme für die Vorlesefunktion (null = kein Vorlesen)
   languages: {
