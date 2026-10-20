@@ -10,8 +10,8 @@
 <meta name="apple-mobile-web-app-title" content="Vokabeln">
 <meta name="theme-color" content="#f3f4fa" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0c0e19" media="(prefers-color-scheme: dark)">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
+<link rel="icon" type="image/png" href="icon-192.png?v=2">
 <link rel="manifest" href="manifest.json">
 <style>
 :root{
@@ -108,6 +108,8 @@ textarea.field{min-height:180px;font-size:16px;resize:vertical;line-height:1.5}
 .vrow{display:flex;width:100%;gap:10px;align-items:center;text-align:left;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text);padding:11px 2px;font:inherit;font-size:15px}
 .vrow b{flex:1;font-weight:600;word-break:break-word} .vrow span{flex:1;color:var(--muted);word-break:break-word}
 .boxes{font-size:11px;color:var(--muted);white-space:nowrap}
+.srow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.srow:last-child{border:0} .srow .btn{padding:9px 12px;font-size:14px;flex:none}
 .lock{text-align:center;padding-top:24px} .lock .e{font-size:48px}
 .pinin{text-align:center;letter-spacing:.4em;font-size:24px!important}
 /* Tabbar, Toast, Modal */
@@ -154,7 +156,7 @@ textarea.field{min-height:180px;font-size:16px;resize:vertical;line-height:1.5}
 const C = window.VT_CONFIG || {};
 const LANGS = C.languages || { en: { name: 'Englisch', flag: '🇬🇧', speech: 'en-GB' } };
 const CLOUD = !!(C.supabaseUrl && C.supabaseKey);
-const VERSION = '1.2';
+const VERSION = '1.3';
 const PARENT = '__parent';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -390,9 +392,30 @@ const API = {
     S.auth = {
       access: j.access_token, refresh: j.refresh_token,
       exp: Date.now() + (j.expires_in || 3600) * 1000,
+      user: (j.user && j.user.id) || (S.auth && S.auth.user),
       email: (j.user && j.user.email) || (S.auth && S.auth.email)
     };
     LS.set('auth', S.auth);
+    if (S.auth.user && !S.prefs.account) { S.prefs.account = S.auth.user; savePrefs(); }
+  },
+  async me() {   // eigene Konto-ID (für ältere Sitzungen ohne gespeicherte ID)
+    if (S.auth && S.auth.user) return S.auth.user;
+    const tok = await API.token();
+    const r = await fetch(C.supabaseUrl + '/auth/v1/user', { headers: { apikey: C.supabaseKey, Authorization: 'Bearer ' + tok } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(j.msg || j.message || ('Fehler ' + r.status)), { status: r.status });
+    S.auth.user = j.id; S.auth.email = j.email || S.auth.email; LS.set('auth', S.auth);
+    if (!S.prefs.account) { S.prefs.account = j.id; savePrefs(); }
+    return j.id;
+  },
+  async setPassword(password) {
+    const tok = await API.token();
+    const r = await fetch(C.supabaseUrl + '/auth/v1/user', {
+      method: 'PUT', headers: { apikey: C.supabaseKey, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.msg || j.error_description || j.message || ('Fehler ' + r.status));
   },
   async token(force) {
     if (!S.auth) throw Object.assign(new Error('Nicht angemeldet'), { status: 401 });
@@ -486,6 +509,44 @@ async function unitCopy(from, to, lang, unit) {
   return list.length;
 }
 
+/* ---------- Konto wechseln: lokale Daten des vorigen Kontos entfernen ---------- */
+function wipeLocal() {
+  try { Object.keys(localStorage).filter(k => k.startsWith('vt_') && k !== 'vt_auth').forEach(k => localStorage.removeItem(k)); } catch (e) { }
+  for (const k of Object.keys(DB)) delete DB[k];
+  S.learners = [];
+  Object.assign(S.prefs, { learner: null, plearner: null, slearner: null, pin: null, everSynced: false, lastSync: null, account: null, shareName: '' });
+  savePrefs(); saveLearners();
+  UNLOCK = false; SHARED.list = null; SHARED.err = null;
+}
+
+/* ---------- Geteilte Units ---------- */
+const SHARED = { list: null, loading: false, err: null };
+async function loadShared() {
+  SHARED.loading = true; SHARED.err = null;
+  try { SHARED.list = await API.all('shared_units', 'id,owner_id,shared_by,lang,unit,items,updated_at', 'updated_at.desc'); }
+  catch (e) { SHARED.err = e.message; }
+  SHARED.loading = false;
+  if (VIEW === 'parent' && UNLOCK && PTAB === 'shared') renderShared();
+}
+async function shareUnit(d, lang, unit, by) {
+  const items = cardsFor(d, lang, unit).map(v => ({ term: v.term, translation: v.translation, note: v.note || null }));
+  if (!items.length) throw new Error('Die Unit ist leer');
+  const me = await API.me();
+  const mine = await API.req(`shared_units?select=id&owner_id=eq.${me}&lang=eq.${pq(lang)}&unit=eq.${pq(unit)}`);
+  if (mine && mine.length) await API.req('shared_units?id=eq.' + mine[0].id, { method: 'PATCH', body: { items, shared_by: by, updated_at: nowIso() }, prefer: 'return=minimal' });
+  else await API.req('shared_units', { method: 'POST', body: { lang, unit, shared_by: by, items }, prefer: 'return=minimal' });
+  return items.length;
+}
+async function importShared(row, d) {
+  const have = new Set(d.vocab.filter(v => v.lang === row.lang && v.unit === row.unit).map(v => norm(v.term) + '|' + norm(v.translation)));
+  const base = Date.now();
+  const list = (row.items || [])
+    .filter(x => x && x.term && x.translation && !have.has(norm(x.term) + '|' + norm(x.translation)))
+    .map((x, i) => ({ id: uuid(), lang: row.lang, unit: row.unit, term: x.term, translation: x.translation, note: x.note || null, created_at: new Date(base + i).toISOString() }));
+  await vocabInsert(d, list);
+  return list.length;
+}
+
 /* ---------- Synchronisation ---------- */
 let SYNC = { s: CLOUD ? 'idle' : 'local', msg: '' };
 let syncing = null, syncAgain = false;
@@ -556,6 +617,7 @@ function sync(manual) {
   syncing = (async () => {
     setSync('sync');
     try {
+      await API.me();
       const migrate = await syncLearners();
       let lids = migrate ? S.learners.map(l => l.id)
         : [S.prefs.learner, VIEW === 'parent' ? (PD() || {}).lid : null, VIEW === 'stats' ? (SD() || {}).lid : null];
@@ -642,7 +704,11 @@ function renderLogin() {
 async function doLogin() {
   const btn = $('#lb'); btn.disabled = true; $('#lerr').textContent = '';
   try {
-    API.setSession(await API.auth('password', { email: $('#le').value.trim(), password: $('#lp').value }));
+    const j = await API.auth('password', { email: $('#le').value.trim(), password: $('#lp').value });
+    const uid = j.user && j.user.id;
+    if (uid && S.prefs.account && S.prefs.account !== uid) wipeLocal();   // anderes Konto → Daten des vorigen entfernen
+    API.setSession(j);
+    if (uid) { S.prefs.account = uid; savePrefs(); }
     show(S.prefs.learner ? 'home' : 'pick'); sync(true);
   } catch (e) {
     $('#lerr').textContent = e.status === 400 ? 'E-Mail oder Passwort falsch.' : 'Anmeldung fehlgeschlagen: ' + e.message;
@@ -983,13 +1049,13 @@ function renderParent() {
   }
   const d = PD();
   if (!d && PTAB !== 'settings') PTAB = 'settings';
-  const tabs = [['import', '➕ Import'], ['list', '📋 Vokabeln'], ['settings', '⚙️ Einstellungen']];
+  const tabs = [['import', '➕ Import'], ['list', '📋 Liste'], ['shared', '🌍 Geteilt'], ['settings', '⚙️']];
   $('#v-parent').innerHTML = `
   <header class="top"><h1>Eltern-Bereich</h1><button class="pill" data-act="lock">🔒 Sperren</button></header>
   ${PTAB !== 'settings' ? `<div class="label" style="margin-top:0">Für welches Kind?</div>${learnerChips('plearner', d && d.lid) || `<p class="small muted" style="margin:0 4px 12px">👤 ${esc((learner(d.lid) || {}).name || '')}</p>`}` : ''}
   <div class="seg" style="margin-bottom:16px">${tabs.map(([v, l]) => `<button data-act="ptab" data-v="${v}" class="${PTAB === v ? 'on' : ''}">${l}</button>`).join('')}</div>
   <div id="pbody"></div>`;
-  ({ import: renderImport, list: renderList, settings: renderSettings })[PTAB]();
+  ({ import: renderImport, list: renderList, shared: renderShared, settings: renderSettings })[PTAB]();
 }
 function doPin() {
   const p1 = $('#pin1').value.trim();
@@ -1094,6 +1160,7 @@ function renderList() {
     ${LST.unit !== '*' ? `<div class="row">
       <button class="btn ghost grow" data-act="unit-rename">✏️ Umbenennen</button>
       ${S.learners.length > 1 ? `<button class="btn ghost grow" data-act="unit-copy">📤 Kopieren</button>` : ''}
+      ${CLOUD ? `<button class="btn ghost grow" data-act="unit-share">🌍 Teilen</button>` : ''}
       <button class="btn danger grow" data-act="unit-del">🗑️ Löschen</button></div>` : ''}
   </div>
   <div class="card" id="vlist"></div>`;
@@ -1133,6 +1200,44 @@ async function delVocab(id) {
   catch (e) { toast('Fehler: ' + e.message, true); }
 }
 
+/* ---------- Geteilte Units ---------- */
+function renderShared() {
+  const body = $('#pbody'); if (!body) return;
+  if (!CLOUD) { body.innerHTML = `<div class="card empty"><div class="e">🌍</div><p class="muted">Geteilte Units gibt es nur mit Cloud-Anbindung.</p></div>`; return; }
+  const d = PD();
+  if (SHARED.list === null && !SHARED.loading && !SHARED.err) loadShared();
+  const me = S.auth && S.auth.user;
+  let html = `<div class="card small muted">Vokabellisten, die Familien in dieser App freigegeben haben. <b>Übernehmen</b> kopiert sie zu ${esc((learner(d && d.lid) || {}).name || 'deinem Kind')}. Eigene Units gibst du unter <b>📋 Liste</b> → Unit wählen → <b>🌍 Teilen</b> frei.</div>`;
+  if (SHARED.loading && SHARED.list === null) html += `<div class="card empty"><p class="muted">Lade geteilte Units …</p></div>`;
+  else if (SHARED.err) html += `<div class="card empty"><p class="muted">⚠️ ${esc(SHARED.err)}</p><button class="btn" data-act="shared-reload">Nochmal versuchen</button></div>`;
+  else if (!SHARED.list.length) html += `<div class="card empty"><div class="e">🌍</div><p class="muted">Noch keine geteilten Units.</p></div>`;
+  else {
+    for (const [lang, L] of Object.entries(LANGS)) {
+      const rows = SHARED.list.filter(r => r.lang === lang).sort((a, b) => collator.compare(a.unit, b.unit));
+      if (!rows.length) continue;
+      html += `<div class="card"><h3>${L.flag} ${esc(L.name)}</h3>${rows.map(r => `
+        <div class="srow"><div><b>${esc(r.unit)}</b><div class="small muted">${(r.items || []).length} Vokabeln · ${r.owner_id === me ? 'von euch' : 'von ' + esc(r.shared_by)} · ${new Date(r.updated_at).toLocaleDateString('de-DE')}</div></div>
+        <div class="row" style="margin:0;flex-wrap:nowrap">${r.owner_id === me ? `<button class="btn ghost" data-act="shared-del" data-id="${r.id}">🗑️</button>` : ''}<button class="btn primary" data-act="shared-take" data-id="${r.id}" ${d ? '' : 'disabled'}>Übernehmen</button></div></div>`).join('')}</div>`;
+    }
+  }
+  body.innerHTML = html;
+}
+function openPwChange() {
+  openModal(`<h2>Passwort ändern</h2>
+  <form id="pwf">
+    <div class="f"><label>Neues Passwort (mind. 8 Zeichen)</label><input id="pw1" class="field" type="password" autocomplete="new-password"></div>
+    <div class="f"><label>Wiederholen</label><input id="pw2" class="field" type="password" autocomplete="new-password"></div>
+    <div class="row"><button type="button" class="btn ghost grow" data-act="modal-close">Abbrechen</button><button class="btn primary grow" type="submit">Speichern</button></div>
+  </form>`);
+}
+async function doPwChange() {
+  const a = $('#pw1').value, b = $('#pw2').value;
+  if (a.length < 8) return toast('Mindestens 8 Zeichen', true);
+  if (a !== b) return toast('Passwörter stimmen nicht überein', true);
+  try { await API.setPassword(a); closeModal(); toast('Passwort geändert – bitte auf allen Geräten das neue verwenden'); }
+  catch (e) { toast('Fehler: ' + e.message, true); }
+}
+
 /* ---------- Einstellungen ---------- */
 function renderSettings() {
   const d = PD();
@@ -1160,8 +1265,13 @@ function renderSettings() {
     <p class="small muted" style="margin-top:0">${CLOUD
       ? `☁️ Cloud-Modus · angemeldet als ${esc((S.auth && S.auth.email) || '–')}<br>Letzter Abgleich: ${S.prefs.lastSync ? new Date(S.prefs.lastSync).toLocaleString('de-DE') : 'noch nie'}${SYNC.s === 'err' ? '<br>⚠️ ' + esc(SYNC.msg) : ''}`
       : '📱 Lokaler Testmodus – alle Daten liegen nur auf diesem Gerät. Für die Cloud-Synchronisation config.js ausfüllen.'}</p>
-    ${CLOUD ? `<div class="row"><button class="btn grow" data-act="sync-now">🔄 Jetzt abgleichen</button><button class="btn ghost" data-act="logout">Abmelden</button></div>` : ''}
+    ${CLOUD ? `<div class="row"><button class="btn grow" data-act="sync-now">🔄 Jetzt abgleichen</button></div>` : ''}
   </div>
+  ${CLOUD ? `<div class="card">
+    <h3>Konto</h3>
+    <p class="small muted" style="margin-top:0">Angemeldet als ${esc((S.auth && S.auth.email) || '–')}. Alle Geräte eurer Familie nutzen dieses Konto.</p>
+    <div class="row"><button class="btn grow" data-act="pw-change">🔑 Passwort ändern</button><button class="btn ghost grow" data-act="logout">Abmelden</button></div>
+  </div>` : ''}
   <div class="card">
     <h3>Sicherung</h3>
     <p class="small muted" style="margin-top:0">Alle Profile mit Vokabeln und Lernstand als Datei sichern oder wiederherstellen.</p>
@@ -1247,7 +1357,36 @@ const ACT = {
   slearner: el => { S.prefs.slearner = el.dataset.v; savePrefs(); renderStats(); sync(); },
   plearner: el => { S.prefs.plearner = el.dataset.v; savePrefs(); LST.unit = '*'; LST.langChosen = false; IMP.langChosen = false; renderParent(); sync(); },
   lock: () => { UNLOCK = false; renderParent(); },
-  ptab: el => { PTAB = el.dataset.v; renderParent(); },
+  ptab: el => { PTAB = el.dataset.v; if (PTAB === 'shared') { SHARED.list = null; SHARED.err = null; } renderParent(); },
+  'shared-reload': () => { SHARED.list = null; SHARED.err = null; renderShared(); },
+  'shared-take': async el => {
+    const row = (SHARED.list || []).find(r => r.id === el.dataset.id), d = PD();
+    if (!row || !d) return;
+    el.disabled = true;
+    try { const n = await importShared(row, d); toast(n ? `${n} Vokabeln zu ${(learner(d.lid) || {}).name} übernommen` : 'Schon vollständig vorhanden'); }
+    catch (e) { toast('Fehler: ' + e.message, true); }
+    el.disabled = false;
+  },
+  'shared-del': async el => {
+    const row = (SHARED.list || []).find(r => r.id === el.dataset.id); if (!row) return;
+    if (!confirm(`Freigabe von „${row.unit}“ zurückziehen? Wer sie schon übernommen hat, behält seine Kopie.`)) return;
+    try { await API.req('shared_units?id=eq.' + row.id, { method: 'DELETE' }); SHARED.list = SHARED.list.filter(r => r.id !== row.id); toast('Freigabe zurückgezogen'); renderShared(); }
+    catch (e) { toast('Fehler: ' + e.message, true); }
+  },
+  'unit-share': () => {
+    const n = cardsFor(PD(), LST.lang, LST.unit).length;
+    openModal(`<h2>„${esc(LST.unit)}“ teilen</h2>
+      <p class="muted small">Die ${n} Vokabeln werden für alle Familien in dieser App sichtbar und können übernommen werden. Namen der Kinder und Lernstände werden nicht geteilt. Teilst du die Unit später erneut, wird die Freigabe aktualisiert.</p>
+      <div class="f"><label>Angezeigt als</label><input id="shby" class="field" value="${esc(S.prefs.shareName || '')}" placeholder="z. B. Familie Müller" maxlength="40"></div>
+      <div class="row"><button class="btn ghost grow" data-act="modal-close">Abbrechen</button><button class="btn primary grow" data-act="unit-share-go">Freigeben</button></div>`);
+  },
+  'unit-share-go': async el => {
+    const by = $('#shby').value.trim(); if (!by) return toast('Bitte einen Namen angeben', true);
+    S.prefs.shareName = by; savePrefs(); el.disabled = true;
+    try { const n = await shareUnit(PD(), LST.lang, LST.unit, by); closeModal(); SHARED.list = null; toast(`${n} Vokabeln geteilt`); }
+    catch (e) { toast('Fehler: ' + e.message, true); el.disabled = false; }
+  },
+  'pw-change': () => openPwChange(),
   'imp-add': () => doImport(),
   edit: el => openEdit(el.dataset.id),
   'edit-save': el => saveEdit(el.dataset.id),
@@ -1302,7 +1441,12 @@ const ACT = {
   },
   export: () => exportBackup(),
   'import-file': () => $('#bfile').click(),
-  logout: () => { if (!confirm('Abmelden?')) return; S.auth = null; LS.set('auth', null); UNLOCK = false; show('login'); }
+  logout: async () => {
+    if (!confirm('Abmelden? Die Daten werden vorher abgeglichen und danach von diesem Gerät entfernt (in der Cloud bleiben sie erhalten).')) return;
+    await sync();
+    if (SYNC.s !== 'ok' && !confirm('Der Abgleich hat nicht geklappt – noch nicht hochgeladene Lernstände gehen verloren. Trotzdem abmelden?')) return;
+    S.auth = null; LS.set('auth', null); wipeLocal(); show('login');
+  }
 };
 document.addEventListener('pointerdown', e => { if (e.target.closest('[data-act="acc"]')) e.preventDefault(); });
 document.addEventListener('click', e => {
@@ -1318,6 +1462,7 @@ document.addEventListener('submit', e => {
   else if (id === 'pinf') doPin();
   else if (id === 'nlf') addLearnerFromPick();
   else if (id === 'nlf2') addLearnerFromSettings();
+  else if (id === 'pwf') doPwChange();
 });
 document.addEventListener('input', e => {
   const id = e.target.id;
