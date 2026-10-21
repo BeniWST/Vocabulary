@@ -155,8 +155,9 @@ textarea.field{min-height:180px;font-size:16px;resize:vertical;line-height:1.5}
    ============================================================ */
 const C = window.VT_CONFIG || {};
 const LANGS = C.languages || { en: { name: 'Englisch', flag: '🇬🇧', speech: 'en-GB' } };
+if (!LANGS.de) LANGS.de = { name: 'Deutsch', flag: '🇩🇪', speech: 'de-DE' };   // Deutsch-Übungen (Wortarten, Artikel, Diktat)
 const CLOUD = !!(C.supabaseUrl && C.supabaseKey);
-const VERSION = '1.3';
+const VERSION = '1.4';
 const PARENT = '__parent';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -267,8 +268,72 @@ function mergeState(a, b) {
 const INTERVAL = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 };   // Tage bis zur nächsten Abfrage je Fach
 const pkey = (id, dir) => id + '|' + dir;
 const prog = (d, id, dir) => d.progress[pkey(id, dir)];
-const promptOf = it => it.dir === 'fd' ? it.card.term : it.card.translation;
-const answerOf = it => it.dir === 'fd' ? it.card.translation : it.card.term;
+/* Deutsch: term = Wort (ohne Artikel), translation = "Wortart|Artikel", note = Notiz
+   Übungen (= eigene Lernkartei-Fächer): wa = Wortart, ar = Artikel, dk = Diktat */
+const DE_DIRS = ['wa', 'ar', 'dk'];
+const DE_NAMES = { wa: 'Wortart', ar: 'Artikel', dk: 'Diktat' };
+const WA_MAIN = ['Nomen', 'Verb', 'Adjektiv'];
+const WA_ALL = ['Nomen', 'Verb', 'Adjektiv', 'Pronomen', 'Präposition', 'Konjunktion', 'Adverb', 'Artikel', 'Zahlwort'];
+const WA_ALIAS = {
+  nomen: 'Nomen', namenwort: 'Nomen', substantiv: 'Nomen', hauptwort: 'Nomen', n: 'Nomen',
+  verb: 'Verb', verben: 'Verb', tunwort: 'Verb', tuwort: 'Verb', zeitwort: 'Verb', 'tätigkeitswort': 'Verb', v: 'Verb',
+  adjektiv: 'Adjektiv', adjektive: 'Adjektiv', wiewort: 'Adjektiv', eigenschaftswort: 'Adjektiv', adj: 'Adjektiv', a: 'Adjektiv',
+  pronomen: 'Pronomen', 'fürwort': 'Pronomen', 'präposition': 'Präposition', 'verhältniswort': 'Präposition',
+  konjunktion: 'Konjunktion', bindewort: 'Konjunktion', adverb: 'Adverb', artikel: 'Artikel', begleiter: 'Artikel', zahlwort: 'Zahlwort'
+};
+const WA_HELP = {
+  Nomen: 'Nomen (Namenwörter) sind Menschen, Tiere, Dinge oder Gefühle. Sie haben einen Artikel und werden großgeschrieben.',
+  Verb: 'Verben (Tunwörter) sagen, was jemand tut oder was passiert: ich laufe, du lachst.',
+  Adjektiv: 'Adjektive (Wiewörter) sagen, wie etwas ist: der schnelle Hund, das Eis ist kalt.'
+};
+const isDeLang = lang => lang === 'de';
+function deInfo(c) { const [wa = '', art = ''] = String((c && c.translation) || '').split('|'); return { wa, art }; }
+const packDe = (wa, art) => art ? `${wa || 'Nomen'}|${art}` : (wa || '');
+function normWa(x) {
+  const t = String(x || '').trim(); if (!t) return '';
+  const a = WA_ALIAS[t.toLowerCase().replace(/[.:]$/, '')]; if (a) return a;
+  if (/\s/.test(t) || t.length > 15) return null;          // sieht nach Notiz aus
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function fmtDe(v) { const i = deInfo(v); return [i.wa, i.art].filter(Boolean).join(' · ') || '–'; }
+const transLabel = v => isDeLang(v.lang) ? fmtDe(v) : v.translation;
+const wordLabel = v => { if (!isDeLang(v.lang)) return v.term; const a = deInfo(v).art; return (a ? a + ' ' : '') + v.term; };
+function dirsFor(c) {
+  if (!isDeLang(c.lang)) return ['fd', 'df'];
+  const i = deInfo(c), out = [];
+  if (i.wa) out.push('wa');
+  if (i.art) out.push('ar');
+  out.push('dk');
+  return out;
+}
+function eligibleDirs(c, dir) { const all = dirsFor(c); return dir === 'mix' ? all : all.filter(x => x === dir); }
+const curDir = lang => isDeLang(lang) ? (S.prefs.deDir || 'wa') : S.prefs.dir;
+
+const promptOf = it => it.dir === 'df' ? it.card.translation : it.card.term;
+function answerOf(it) {
+  const c = it.card;
+  if (it.dir === 'fd') return c.translation;
+  if (it.dir === 'wa') return deInfo(c).wa;
+  if (it.dir === 'ar') return deInfo(c).art;
+  return c.term;   // df, dk
+}
+const solOf = it => it.dir === 'ar' ? deInfo(it.card).art + ' ' + it.card.term : answerOf(it);
+
+/* Diktat: genaue Schreibweise inkl. Groß-/Kleinschreibung */
+function dkCheck(val, c) {
+  const info = deInfo(c);
+  let u = String(val || '').trim().replace(/\s+/g, ' ').replace(/[’`´]/g, "'");
+  const t = String(c.term).trim().replace(/\s+/g, ' ');
+  if (!u) return { ok: false };
+  if (info.art && u.toLowerCase().startsWith(info.art + ' ')) u = u.slice(info.art.length + 1).trim();
+  if (u === t) return { ok: true };
+  if (u.toLowerCase() === t.toLowerCase()) {
+    const big = t.charAt(0) !== t.charAt(0).toLowerCase();
+    return { ok: false, near: true, hint: info.wa === 'Nomen' ? 'Nomen schreibt man groß!' : big ? 'Dieses Wort schreibt man groß.' : 'Dieses Wort schreibt man klein.' };
+  }
+  if (t.length >= 4 && lev(u.toLowerCase(), t.toLowerCase()) <= 1) return { ok: false, near: true, hint: 'Fast! Nur ein Buchstabe stimmt nicht.' };
+  return { ok: false };
+}
 
 function unitsOf(d, lang) {
   if (!d) return [];
@@ -289,10 +354,11 @@ function grade(d, card, dir, ok) {
 
 function buildQueue(d, { lang, unit, dir, test }) {
   const t = dayStr();
-  const dirs = dir === 'mix' ? ['fd', 'df'] : [dir];
   const cards = shuffle(cardsFor(d, lang, unit).slice());
   const due = [], fresh = [], all = [];
   for (const c of cards) {
+    const dirs = eligibleDirs(c, dir);
+    if (!dirs.length) continue;
     let pd = null, pn = null;
     for (const dr of shuffle(dirs.slice())) {
       const p = prog(d, c.id, dr);
@@ -361,13 +427,13 @@ function check(input, expected) {
 /* ============================================================
    Vorlesen
    ============================================================ */
-function speak(text, lang) {
+function speak(text, lang, rate) {
   const code = (LANGS[lang] || {}).speech;
   if (!code || !('speechSynthesis' in window)) return;
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(String(text).replace(/\([^)]*\)|\[[^\]]*\]/g, '').split(/[;\/]/)[0]);
-    u.lang = code; u.rate = 0.9;
+    u.lang = code; u.rate = rate || 0.9;
     const voices = speechSynthesis.getVoices();
     const v = voices.find(v => v.lang.replace('_', '-') === code) || voices.find(v => v.lang.startsWith(code.slice(0, 2)));
     if (v) u.voice = v;
@@ -589,8 +655,18 @@ async function syncLearner(d) {
     sent[k] = p.updated_at;
     rows.push({ learner_id: d.lid, vocab_id: id, dir, box: p.box, due: p.due, correct: p.correct || 0, wrong: p.wrong || 0, updated_at: p.updated_at });
   }
-  for (const c of chunks(rows, 500)) await API.req('progress?on_conflict=learner_id,vocab_id,dir', { method: 'POST', body: c, prefer: 'resolution=merge-duplicates,return=minimal' });
-  for (const k of Object.keys(sent)) if (d.progress[k] && d.progress[k].updated_at === sent[k]) d.dirty.delete(k);
+  const up = list => chunks(list, 500).reduce((pr, c) => pr.then(() => API.req('progress?on_conflict=learner_id,vocab_id,dir', { method: 'POST', body: c, prefer: 'resolution=merge-duplicates,return=minimal' })), Promise.resolve());
+  const std = rows.filter(r => r.dir === 'fd' || r.dir === 'df'), ext = rows.filter(r => r.dir !== 'fd' && r.dir !== 'df');
+  await up(std);
+  let extFailed = false;
+  if (ext.length) {
+    try { await up(ext); S.extWarn = false; }
+    catch (e) { if (e.status === 400 || e.status === 409) { extFailed = true; S.extWarn = true; } else throw e; }   // Datenbank kennt Deutsch-Übungen noch nicht
+  }
+  for (const k of Object.keys(sent)) {
+    if (extFailed && !/\|(fd|df)$/.test(k)) continue;
+    if (d.progress[k] && d.progress[k].updated_at === sent[k]) d.dirty.delete(k);
+  }
 
   // 3) Lernstand holen und zusammenführen
   const rp = await API.all('progress', 'vocab_id,dir,box,due,correct,wrong,updated_at', 'vocab_id.asc,dir.asc', f);
@@ -761,8 +837,9 @@ function renderHome() {
   if (P.unit !== '*' && !units.includes(P.unit)) P.unit = '*';
   const L = LANGS[P.lang], code = P.lang.toUpperCase();
   const lv = levelInfo(st.xp || 0), tc = todayCount(d), goal = st.goal || 20;
-  const total = cardsFor(d, P.lang, P.unit).length;
-  const q = total ? buildQueue(d, { lang: P.lang, unit: P.unit, dir: P.dir }) : [];
+  const de = isDeLang(P.lang), dir = curDir(P.lang);
+  const all = cardsFor(d, P.lang, P.unit), total = all.filter(c => eligibleDirs(c, dir).length).length;
+  const q = total ? buildQueue(d, { lang: P.lang, unit: P.unit, dir }) : [];
   const seg = (act, items, cur) => `<div class="seg">${items.map(([v, l]) => `<button data-act="${act}" data-v="${v}" class="${v === cur ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   $('#v-home').innerHTML = `
   <header class="top">
@@ -775,19 +852,25 @@ function renderHome() {
     <div class="stat"><div class="big">🎯 ${tc}/${goal}</div><div class="bar ${tc >= goal ? 'done' : ''}"><i style="width:${pct(tc, goal)}%"></i></div><div class="muted small">heute</div></div>
   </div>
   <div class="label">Sprache</div>
-  ${seg('lang', Object.entries(LANGS).map(([k, l]) => [k, l.flag + ' ' + esc(l.name)]), P.lang)}
+  ${Object.keys(LANGS).length > 3
+    ? `<div class="chips">${Object.entries(LANGS).map(([k, l]) => `<button data-act="lang" data-v="${k}" class="chip ${k === P.lang ? 'on' : ''}">${l.flag} ${esc(l.name)}</button>`).join('')}</div>`
+    : seg('lang', Object.entries(LANGS).map(([k, l]) => [k, l.flag + ' ' + esc(l.name)]), P.lang)}
   <div class="label">Unit</div>
   <div class="chips">${['*', ...units].map(u => `<button data-act="unit" data-v="${esc(u)}" class="chip ${u === P.unit ? 'on' : ''}">${u === '*' ? 'Alle' : esc(u)}</button>`).join('')}</div>
-  <div class="label">Richtung</div>
+  ${de ? `<div class="label">Übung</div>
+  ${seg('dedir', [['wa', '🏷️ Wortart'], ['ar', 'Artikel'], ['dk', '🔊 Diktat'], ['mix', 'Mix']], dir)}` : `<div class="label">Richtung</div>
   ${seg('dir', [['fd', code + ' → DE'], ['df', 'DE → ' + code], ['mix', 'Gemischt']], P.dir)}
   <div class="label">Abfrage</div>
-  ${seg('mode', [['type', '⌨️ Tippen'], ['mc', '🔘 Auswahl'], ['flip', '🃏 Karte']], P.mode)}
-  ${total === 0 ? `
-    <div class="card empty"><div class="e">📭</div><h3>Noch keine ${esc(L.name)}-Vokabeln</h3>
-    <p class="muted small">Im Eltern-Bereich 🔒 können Vokabeln importiert werden.</p></div>` : `
+  ${seg('mode', [['type', '⌨️ Tippen'], ['mc', '🔘 Auswahl'], ['flip', '🃏 Karte']], P.mode)}`}
+  ${all.length === 0 ? `
+    <div class="card empty"><div class="e">📭</div><h3>Noch keine ${esc(L.name)}-${de ? 'Wörter' : 'Vokabeln'}</h3>
+    <p class="muted small">Im Eltern-Bereich 🔒 können ${de ? 'Wörter' : 'Vokabeln'} importiert werden.</p></div>` : total === 0 ? `
+    <div class="card empty"><div class="e">🤔</div><h3>Für diese Übung fehlen Angaben</h3>
+    <p class="muted small">${dir === 'ar' ? 'Für „Artikel“ braucht es Nomen mit der/die/das.' : 'Für „Wortart“ braucht es Wörter mit Wortart.'} Das lässt sich im Eltern-Bereich ergänzen.</p></div>` : `
     <button class="cta" data-act="start" ${q.length ? '' : 'disabled'}>${q.length ? `Los geht's · ${q.length} Karten` : 'Alles erledigt für heute 🎉'}</button>
     <button class="btn ghost wide" data-act="start-test">📝 Alle ${total} üben (Test-Modus)</button>
     <p class="muted small" style="text-align:center;margin-top:10px">Im Test-Modus wird alles abgefragt – ideal vor Klassenarbeiten.</p>`}`;
+  $$('#v-home .chips').forEach(row => { const on = row.querySelector('.chip.on'); if (on) row.scrollLeft = on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2; });
 }
 
 /* ============================================================
@@ -797,7 +880,7 @@ const cur = () => SES.queue[SES.i];
 function startSession(src) {
   const d = AD(); if (!d) return;
   const P = S.prefs, test = src === 'test', practice = test || Array.isArray(src);
-  const q = Array.isArray(src) ? shuffle(src.slice()) : buildQueue(d, { lang: P.lang, unit: P.unit, dir: P.dir, test });
+  const q = Array.isArray(src) ? shuffle(src.slice()) : buildQueue(d, { lang: P.lang, unit: P.unit, dir: curDir(P.lang), test });
   if (!q.length) return toast('Keine Karten verfügbar');
   SES = { d, queue: q.map(x => ({ card: x.card, dir: x.dir })), i: 0, combo: 0, xp: 0, mode: P.mode, practice };
   show('session');
@@ -816,14 +899,27 @@ function mcOptions(it) {
   }
   return shuffle(out);
 }
+function waOptions() {
+  if (SES.waOpts) return SES.waOpts;
+  const extra = [...new Set(SES.d.vocab.filter(v => isDeLang(v.lang)).map(v => deInfo(v).wa).filter(w => w && !WA_MAIN.includes(w)))];
+  return (SES.waOpts = WA_MAIN.concat(extra).slice(0, 6));
+}
 function renderQ() {
   if (!SES) return show('home');
   const it = cur(), c = it.card, fd = it.dir === 'fd', L = LANGS[c.lang] || {};
+  const de = isDeLang(c.lang), dk = it.dir === 'dk';
   document.body.dataset.lang = c.lang;
   let mode = SES.mode;
-  if (mode === 'mc') { it.opts = it.opts || mcOptions(it); if (it.opts.length < 4) mode = 'flip'; }
+  if (de) {
+    if (it.dir === 'wa') { mode = 'mc'; it.opts = waOptions(); }
+    else if (it.dir === 'ar') { mode = 'mc'; it.opts = ['der', 'die', 'das']; }
+    else mode = 'type';
+  } else if (mode === 'mc') { it.opts = it.opts || mcOptions(it); if (it.opts.length < 4) mode = 'flip'; }
   it.modeUsed = mode;
   const n = SES.queue.length;
+  const meta = de ? `${L.flag || ''} ${DE_NAMES[it.dir]}` : `${L.flag || ''} ${fd ? esc(L.name) + ' → Deutsch' : 'Deutsch → ' + esc(L.name)}`;
+  const ask = it.dir === 'wa' ? 'Welche Wortart ist das?' : it.dir === 'ar' ? 'Welcher Artikel passt?' : '';
+  const canSpeech = 'speechSynthesis' in window;
   $('#v-session').innerHTML = `
   <div class="sesstop">
     <button class="icon" data-act="quit" aria-label="Beenden">✕</button>
@@ -832,28 +928,36 @@ function renderQ() {
   </div>
   ${SES.combo >= 3 ? `<div class="combo">🔥 ${SES.combo}er-Serie!</div>` : ''}
   <div class="qcard ${it.retry ? 'retry' : ''}">
-    <div class="qmeta">${L.flag || ''} ${fd ? esc(L.name) + ' → Deutsch' : 'Deutsch → ' + esc(L.name)} · ${esc(c.unit)}${it.retry ? ' · nochmal' : ''}${SES.practice ? ' · Übung' : ''}</div>
-    <div class="prompt">${esc(promptOf(it))}</div>
-    ${fd && L.speech ? `<button class="icon speak" data-act="speak" data-t="${esc(c.term)}" data-l="${c.lang}" aria-label="Vorlesen">🔊</button>` : ''}
+    <div class="qmeta">${meta} · ${esc(c.unit)}${it.retry ? ' · nochmal' : ''}${SES.practice ? ' · Übung' : ''}</div>
+    ${dk ? `<div class="prompt" style="font-size:20px">Hör gut zu und schreib das Wort auf.</div>
+      <div class="row" style="justify-content:center">
+        ${canSpeech ? `<button class="btn primary" data-act="dk-play">🔊 Anhören</button><button class="btn" data-act="dk-play" data-slow="1">🐢 Langsam</button>`
+                    : `<button class="btn" data-act="dk-show">👀 Wort kurz zeigen</button>`}
+      </div>
+      <div id="dkword" class="prompt" hidden style="margin-top:10px">${esc(wordLabel(c))}</div>`
+       : `${ask ? `<div class="small muted" style="margin-bottom:6px">${ask}</div>` : ''}<div class="prompt">${esc(promptOf(it))}</div>`}
+    ${!dk && (fd || de) && L.speech ? `<button class="icon speak" data-act="speak" data-t="${esc(c.term)}" data-l="${c.lang}" aria-label="Vorlesen">🔊</button>` : ''}
   </div>
   <div id="ans"></div>
   <div id="fb"></div>`;
   const ans = $('#ans');
   if (mode === 'type') {
-    const acc = !fd && c.lang === 'fr' ? ['é', 'è', 'ê', 'à', 'â', 'ç', 'ô', 'î', 'û', 'ù', 'ë', 'ï', 'œ'] : [];
+    const acc = dk ? ['ä', 'ö', 'ü', 'ß', 'Ä', 'Ö', 'Ü'] : !fd && c.lang === 'fr' ? ['é', 'è', 'ê', 'à', 'â', 'ç', 'ô', 'î', 'û', 'ù', 'ë', 'ï', 'œ'] : [];
+    const ph = dk ? 'Wort schreiben …' : fd ? 'Auf Deutsch …' : 'Auf ' + esc(L.name) + ' …';
     ans.innerHTML = `
     <form id="tf" class="typeform" autocomplete="off">
-      <input id="ti" type="text" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="done" placeholder="${fd ? 'Auf Deutsch …' : 'Auf ' + esc(L.name) + ' …'}">
+      <input id="ti" type="text" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="done" placeholder="${ph}">
       ${acc.length ? `<div class="accbar">${acc.map(a => `<button type="button" data-act="acc" data-c="${a}">${a}</button>`).join('')}</div>` : ''}
       <div class="row" id="trow"><button type="button" class="btn ghost" data-act="dunno">Weiß ich nicht</button><button class="btn primary grow" type="submit">Prüfen</button></div>
     </form>`;
-    setTimeout(() => { const i = $('#ti'); if (i) i.focus(); }, 60);
+    if (!dk) setTimeout(() => { const i = $('#ti'); if (i) i.focus(); }, 60);
   } else if (mode === 'mc') {
     ans.innerHTML = `<div class="mc">${it.opts.map((o, i) => `<button data-act="mc" data-i="${i}">${esc(o)}</button>`).join('')}</div>`;
   } else {
     ans.innerHTML = `<button class="btn primary wide" data-act="flip">Aufdecken</button>`;
   }
-  if (fd && L.speech && S.prefs.autoSpeak) speak(c.term, c.lang);
+  if (dk && canSpeech) { const a = deInfo(c).art; speak((a ? a + ' ' : '') + c.term, 'de', 0.85); }   // direkt im Tipp-Ereignis, sonst blockiert iOS
+  else if (fd && L.speech && S.prefs.autoSpeak) speak(c.term, c.lang);
 }
 function applyAnswer(ok) {
   const it = cur(), d = SES.d;
@@ -897,7 +1001,7 @@ function answerType(dunno) {
   const it = cur(); if (it.answered) return;
   const inp = $('#ti'); const val = dunno ? '' : inp.value;
   if (!dunno && !val.trim()) { inp.focus(); return; }
-  const r = dunno ? { ok: false } : check(val, answerOf(it));
+  const r = dunno ? { ok: false } : it.dir === 'dk' ? dkCheck(val, it.card) : check(val, answerOf(it));
   applyAnswer(r.ok);
   inp.disabled = true; inp.blur(); $('#trow').hidden = true;
   const ab = $('.accbar'); if (ab) ab.hidden = true;
@@ -932,16 +1036,18 @@ function renderFeedback(info) {
   <div class="fb ${it.ok ? 'ok' : 'bad'}">
     <div class="fbhead">${head}${it.gain ? `<span class="xp">+${it.gain} XP</span>` : ''}</div>
     ${showSol || !it.ok ? `<div class="small muted">${it.ok ? 'Lösung' : 'Richtig wäre'}:</div>
-      <div class="sol">${esc(answerOf(it))}${!fd && L.speech ? `<button class="icon" data-act="speak" data-t="${esc(c.term)}" data-l="${c.lang}">🔊</button>` : ''}</div>` : ''}
+      <div class="sol">${esc(solOf(it))}${!fd && L.speech ? `<button class="icon" data-act="speak" data-t="${esc(it.dir === 'ar' || it.dir === 'dk' ? wordLabel(c) : c.term)}" data-l="${c.lang}">🔊</button>` : ''}</div>` : ''}
+    ${it.dir === 'wa' && WA_HELP[deInfo(c).wa] ? `<div class="hint">💡 ${esc(WA_HELP[deInfo(c).wa])}</div>` : ''}
+    ${it.dir === 'ar' && it.ok ? `<div class="hint">👍 ${esc(solOf(it))}</div>` : ''}
     ${info.given && !it.ok ? `<div class="given">Deine Antwort: <s>${esc(info.given)}</s></div>` : ''}
     ${info.hint ? `<div class="hint">💡 ${esc(info.hint)}</div>` : ''}
     ${c.note ? `<div class="note">${esc(c.note)}</div>` : ''}
     <div class="row">
-      ${!it.ok && it.modeUsed === 'type' && info.given ? `<button class="btn ghost" data-act="override">Ich hatte recht</button>` : ''}
+      ${!it.ok && it.modeUsed === 'type' && it.dir !== 'dk' && info.given ? `<button class="btn ghost" data-act="override">Ich hatte recht</button>` : ''}
       <button class="btn primary grow" data-act="next">Weiter →</button>
     </div>
   </div>`;
-  if (!fd && L.speech && S.prefs.autoSpeak && it.modeUsed !== 'flip') speak(c.term, c.lang);
+  if (!fd && !isDeLang(c.lang) && L.speech && S.prefs.autoSpeak && it.modeUsed !== 'flip') speak(c.term, c.lang);
   setTimeout(() => { const f = $('#fb'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, 30);
 }
 function nextQ() {
@@ -974,7 +1080,7 @@ function renderDone() {
     <p class="muted">${tc >= goal ? '🎯 Tagesziel geschafft!' : `🎯 Noch ${goal - tc} bis zum Tagesziel`} · 🔥 ${sk} ${sk === 1 ? 'Tag' : 'Tage'} in Folge</p>
   </div>
   ${sm.wrong.length ? `<div class="card"><h3>Das üben wir nochmal</h3>
-    ${sm.wrong.map(w => `<div class="wl"><span><b>${esc(w.dir === 'fd' ? w.card.term : w.card.translation)}</b></span><span>${esc(w.dir === 'fd' ? w.card.translation : w.card.term)}</span></div>`).join('')}
+    ${sm.wrong.map(w => `<div class="wl"><span><b>${esc(w.dir === 'df' ? w.card.translation : w.dir === 'dk' ? wordLabel(w.card) : w.card.term)}</b></span><span>${esc(w.dir === 'dk' ? '✍️ Diktat' : isDeLang(w.card.lang) ? DE_NAMES[w.dir] + ': ' + solOf(w) : solOf(w))}</span></div>`).join('')}
   </div>
   <button class="btn primary wide" data-act="retry-wrong">🔁 Fehler gleich nochmal üben</button>` : ''}
   <button class="btn ghost wide" style="margin-top:10px" data-act="home">Fertig</button>`;
@@ -1005,27 +1111,27 @@ function renderStats() {
     if (!cards.length) continue;
     any = true;
     const box = [0, 0, 0, 0, 0, 0];
-    for (const v of cards) for (const dr of ['fd', 'df']) { const p = prog(d, v.id, dr); box[p ? p.box : 0]++; }
-    const items = cards.length * 2;
+    let items = 0;
+    for (const v of cards) for (const dr of dirsFor(v)) { const p = prog(d, v.id, dr); box[p ? p.box : 0]++; items++; }
     const units = unitsOf(d, lang).map(u => {
       const cs = cards.filter(v => v.unit === u);
-      let sum = 0; cs.forEach(v => ['fd', 'df'].forEach(dr => { const p = prog(d, v.id, dr); sum += p ? p.box : 0; }));
-      return [u, pct(sum, cs.length * 10)];
+      let sum = 0, max = 0; cs.forEach(v => dirsFor(v).forEach(dr => { const p = prog(d, v.id, dr); sum += p ? p.box : 0; max += 5; }));
+      return [u, pct(sum, max)];
     });
-    const hard = cards.map(v => ({ v, wr: ['fd', 'df'].reduce((s, dr) => s + ((prog(d, v.id, dr) || {}).wrong || 0), 0) }))
+    const hard = cards.map(v => ({ v, wr: dirsFor(v).reduce((s, dr) => s + ((prog(d, v.id, dr) || {}).wrong || 0), 0) }))
       .filter(x => x.wr > 0).sort((a, b) => b.wr - a.wr).slice(0, 5);
     html += `<div class="card">
-      <h3>${L.flag} ${esc(L.name)} <span class="muted small">· ${cards.length} Vokabeln</span></h3>
+      <h3>${L.flag} ${esc(L.name)} <span class="muted small">· ${cards.length} ${isDeLang(lang) ? 'Wörter' : 'Vokabeln'}</span></h3>
       <div class="stack">${box.map((n, i) => n ? `<i style="width:${n / items * 100}%;background:${BOXC[i]}"></i>` : '').join('')}</div>
       <div class="legend">${box.map((n, i) => `<span style="--c:${BOXC[i]}">${BOXL[i]} ${n}</span>`).join('')}</div>
       <div class="label" style="margin-top:14px">Units</div>
       ${units.map(([u, p]) => `<div class="urow"><span class="n">${esc(u)}</span><div class="bar ${p >= 100 ? 'done' : ''}"><i style="width:${p}%"></i></div><span class="p">${p} %</span></div>`).join('')}
       ${hard.length ? `<div class="label" style="margin-top:14px">Knifflige Wörter</div>
-        ${hard.map(x => `<div class="wl"><span><b>${esc(x.v.term)}</b> – ${esc(x.v.translation)}</span><span>${x.wr}× falsch</span></div>`).join('')}` : ''}
+        ${hard.map(x => `<div class="wl"><span><b>${esc(wordLabel(x.v))}</b> – ${esc(transLabel(x.v))}</span><span>${x.wr}× falsch</span></div>`).join('')}` : ''}
     </div>`;
   }
   if (!any) html += `<div class="card empty"><div class="e">📊</div><p class="muted">Sobald Vokabeln da sind und gelernt wird, erscheint hier der Fortschritt.</p></div>`;
-  html += `<p class="muted small" style="text-align:center">Jede Vokabel wird in beide Richtungen gelernt. Richtig → ein Fach weiter, falsch → zurück in Fach 1.</p>`;
+  html += `<p class="muted small" style="text-align:center">Jede Vokabel wird in beide Richtungen gelernt, bei Deutsch hat jede Übung (Wortart, Artikel, Diktat) ein eigenes Fach. Richtig → ein Fach weiter, falsch → zurück in Fach 1.</p>`;
   $('#v-stats').innerHTML = html;
 }
 
@@ -1071,10 +1177,11 @@ function doPin() {
 }
 
 /* ---------- Import ---------- */
-function parseLines(text, swap) {
+function parseLines(text, swap, lang) {
   const ok = [], bad = [];
   for (const raw of String(text).split(/\r?\n/)) {
     const line = raw.trim(); if (!line) continue;
+    if (isDeLang(lang)) { const r = parseDe(line); if (r) ok.push(r); else bad.push(line); continue; }
     let parts = null;
     if (line.includes('\t')) parts = line.split('\t');
     else if (line.includes(';')) parts = line.split(';');
@@ -1086,6 +1193,23 @@ function parseLines(text, swap) {
     ok.push({ term: a, translation: b, note: rest.join('; ') || null });
   }
   return { ok, bad };
+}
+/* Deutsch: Wort ; Wortart ; Artikel ; Notiz  (alles außer dem Wort ist optional) */
+function parseDe(line) {
+  let parts = line.includes('\t') ? line.split('\t') : line.includes(';') ? line.split(';') : line.split(/\s+[–—]\s+/);
+  parts = parts.map(s => s.trim());
+  let word = parts[0] || '', wa = parts[1] || '', art = parts[2] || '';
+  const rest = parts.slice(3).filter(Boolean);
+  const m = word.match(/^(der|die|das)\s+(.+)$/i);
+  if (m) { art = art || m[1].toLowerCase(); word = m[2].trim(); }
+  if (!word || word.length > 60) return null;
+  if (/^(der|die|das)$/i.test(wa)) { if (art && !/^(der|die|das)$/i.test(art)) rest.unshift(art); art = wa.toLowerCase(); wa = 'Nomen'; }
+  let w = normWa(wa);
+  if (w === null) { rest.unshift(wa); w = ''; }
+  if (art) { if (/^(der|die|das)$/i.test(art)) art = art.toLowerCase(); else { rest.unshift(art); art = ''; } }
+  if (!w && art) w = 'Nomen';
+  if (!w && /^\p{Lu}/u.test(word)) w = 'Nomen';
+  return { term: word, translation: packDe(w, art), note: rest.join('; ') || null };
 }
 function renderImport() {
   const d = PD();
@@ -1100,30 +1224,37 @@ function renderImport() {
       ${units.map(u => `<option value="${esc(u)}" ${u === IMP.unit ? 'selected' : ''}>${esc(u)}</option>`).join('')}
       <option value="__new" ${IMP.unit === '__new' ? 'selected' : ''}>➕ Neue Unit …</option></select></div>
     <div class="f" id="inewwrap" ${IMP.unit === '__new' ? '' : 'hidden'}><input id="inewunit" class="field" placeholder="z. B. Unit 4 oder Lektion 12" value="${esc(IMP.newUnit)}"></div>
-    <div class="f"><label>Vokabeln – eine pro Zeile</label>
+    ${isDeLang(IMP.lang) ? `<div class="f"><label>Wörter – eines pro Zeile</label>
+      <textarea id="itext" class="field" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="der Hund ; Nomen ; ; Mehrzahl: die Hunde&#10;springen ; Verb ; ; ich springe, er sprang&#10;schnell ; Adjektiv&#10;Fahrrad">${esc(IMP.text)}</textarea></div>`
+    : `<div class="f"><label>Vokabeln – eine pro Zeile</label>
       <textarea id="itext" class="field" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="apple ; Apfel&#10;to look after ; sich kümmern um&#10;puella ; Mädchen ; -ae f.">${esc(IMP.text)}</textarea></div>
-    <label class="check"><input type="checkbox" id="iswap" ${IMP.swap ? 'checked' : ''}> Deutsch steht links (Spalten tauschen)</label>
+    <label class="check"><input type="checkbox" id="iswap" ${IMP.swap ? 'checked' : ''}> Deutsch steht links (Spalten tauschen)</label>`}
     <div id="iprev" class="prev"></div>
     <button class="btn primary wide" data-act="imp-add">Hinzufügen für ${esc((learner(d.lid) || {}).name || '')}</button>
   </div>
-  <div class="card small muted">
+  ${isDeLang(IMP.lang) ? `<div class="card small muted">
+    💡 <b>Format Deutsch:</b> Wort ; Wortart ; Artikel ; Notiz. Nur das Wort ist Pflicht – reine Lernwörter-Listen für das Diktat gehen also auch.<br><br>
+    Nomen dürfen mit Artikel davor stehen („der Hund“). Wortarten: Nomen, Verb, Adjektiv (auch Namenwort, Tunwort, Wiewort). Großgeschriebene Wörter ohne Wortart werden als Nomen erkannt.<br><br>
+    📷 Lernwörter-Liste fotografieren und das Foto an Claude schicken – die fertige Liste kommt zurück.
+  </div>` : `<div class="card small muted">
     💡 <b>Format:</b> Fremdsprache ; Deutsch ; Notiz (optional). Statt „;“ gehen auch Tab, „=“ oder „ – “. Mehrere richtige Bedeutungen mit Komma trennen.<br><br>
     📷 <b>Schnell-Import:</b> Vokabelseite fotografieren, Text im Foto lange drücken (Live Text) → „Alles auswählen“ → kopieren → hier einfügen. Oder das Foto an Claude schicken und die fertige Liste hier einfügen.
-  </div>`;
+  </div>`}`;
   updatePreview();
 }
 function updatePreview() {
   const el = $('#iprev'); if (!el) return;
   if (!IMP.text.trim()) { el.innerHTML = ''; return; }
-  const { ok, bad } = parseLines(IMP.text, IMP.swap);
-  el.innerHTML = `<b>${ok.length}</b> Vokabeln erkannt${ok.length ? ` – z. B. <i>${esc(ok[0].term)}</i> → <i>${esc(ok[0].translation)}</i>` : ''}
+  const { ok, bad } = parseLines(IMP.text, IMP.swap, IMP.lang);
+  const ex = ok[0] && (isDeLang(IMP.lang) ? `<i>${esc(wordLabel({ lang: 'de', term: ok[0].term, translation: ok[0].translation }))}</i> (${esc(fmtDe(ok[0]))})` : `<i>${esc(ok[0].term)}</i> → <i>${esc(ok[0].translation)}</i>`);
+  el.innerHTML = `<b>${ok.length}</b> ${isDeLang(IMP.lang) ? 'Wörter' : 'Vokabeln'} erkannt${ok.length ? ` – z. B. ${ex}` : ''}
     ${bad.length ? `<div class="badl">⚠️ ${bad.length} Zeile(n) nicht erkannt: ${bad.slice(0, 3).map(b => '„' + esc(b) + '“').join(', ')}${bad.length > 3 ? ' …' : ''}</div>` : ''}`;
 }
 async function doImport() {
   const d = PD(), lang = IMP.lang;
   const unit = (IMP.unit === '__new' ? IMP.newUnit : IMP.unit || '').trim();
   if (!unit) return toast('Bitte einen Namen für die Unit angeben', true);
-  const { ok } = parseLines(IMP.text, IMP.swap);
+  const { ok } = parseLines(IMP.text, IMP.swap, lang);
   if (!ok.length) return toast('Keine Vokabeln erkannt', true);
   const existing = new Set(d.vocab.filter(v => v.lang === lang && v.unit === unit).map(v => norm(v.term) + '|' + norm(v.translation)));
   const base = Date.now(), list = []; let dup = 0;
@@ -1172,14 +1303,28 @@ function renderVList() {
   if (q) list = list.filter(v => norm(v.term).includes(q) || norm(v.translation).includes(q));
   list.sort((a, b) => collator.compare(a.unit, b.unit) || (a.created_at || '').localeCompare(b.created_at || ''));
   const shown = list.slice(0, 300);
-  const bx = (id, dr) => { const p = prog(d, id, dr); return p ? p.box : 0; };
+  const bx = v => dirsFor(v).map(dr => { const p = prog(d, v.id, dr); return p ? p.box : 0; }).join('|');
   $('#vlist').innerHTML = list.length ? `
-    <div class="small muted" style="margin-bottom:6px">${list.length} Vokabeln${list.length > 300 ? ' (erste 300 angezeigt – bitte filtern)' : ''} · Tippen zum Bearbeiten · Zahlen = Fach je Richtung</div>
-    ${shown.map(v => `<button class="vrow" data-act="edit" data-id="${v.id}"><b>${esc(v.term)}</b><span>${esc(v.translation)}${v.note ? ' · <i>' + esc(v.note) + '</i>' : ''}</span><span class="boxes" style="flex:none">${bx(v.id, 'fd')}|${bx(v.id, 'df')}</span></button>`).join('')}`
+    <div class="small muted" style="margin-bottom:6px">${list.length} Vokabeln${list.length > 300 ? ' (erste 300 angezeigt – bitte filtern)' : ''} · Tippen zum Bearbeiten · Zahlen = Fach je ${isDeLang(LST.lang) ? 'Übung' : 'Richtung'}</div>
+    ${shown.map(v => `<button class="vrow" data-act="edit" data-id="${v.id}"><b>${esc(wordLabel(v))}</b><span>${esc(transLabel(v))}${v.note ? ' · <i>' + esc(v.note) + '</i>' : ''}</span><span class="boxes" style="flex:none">${bx(v)}</span></button>`).join('')}`
     : `<p class="muted" style="text-align:center">Keine Vokabeln gefunden.</p>`;
 }
 function openEdit(id) {
   const v = PD().vocab.find(x => x.id === id); if (!v) return;
+  if (isDeLang(v.lang)) {
+    const i = deInfo(v), was = WA_ALL.includes(i.wa) || !i.wa ? WA_ALL : WA_ALL.concat([i.wa]);
+    openModal(`
+    <h2>Wort bearbeiten</h2>
+    <div class="f"><label>Wort (ohne Artikel)</label><input id="eterm" class="field" value="${esc(v.term)}" autocapitalize="off" autocorrect="off"></div>
+    <div class="row" style="margin-top:0">
+      <div class="f grow"><label>Wortart</label><select id="ewa" class="field"><option value="">– keine –</option>${was.map(w => `<option ${w === i.wa ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select></div>
+      <div class="f grow"><label>Artikel</label><select id="eart" class="field">${['', 'der', 'die', 'das'].map(a => `<option value="${a}" ${a === i.art ? 'selected' : ''}>${a || '–'}</option>`).join('')}</select></div>
+    </div>
+    <div class="f"><label>Notiz (optional, z. B. Mehrzahl)</label><input id="enote" class="field" value="${esc(v.note || '')}" autocapitalize="off"></div>
+    <div class="f"><label>Unit</label><input id="eunit" class="field" value="${esc(v.unit)}"></div>
+    <div class="row"><button class="btn danger" data-act="edit-del" data-id="${v.id}">🗑️</button><button class="btn ghost grow" data-act="modal-close">Abbrechen</button><button class="btn primary grow" data-act="edit-save" data-id="${v.id}">Speichern</button></div>`);
+    return;
+  }
   openModal(`
   <h2>Vokabel bearbeiten</h2>
   <div class="f"><label>${esc((LANGS[v.lang] || {}).name || v.lang)}</label><input id="eterm" class="field" value="${esc(v.term)}" autocapitalize="off" autocorrect="off"></div>
@@ -1189,8 +1334,10 @@ function openEdit(id) {
   <div class="row"><button class="btn danger" data-act="edit-del" data-id="${v.id}">🗑️</button><button class="btn ghost grow" data-act="modal-close">Abbrechen</button><button class="btn primary grow" data-act="edit-save" data-id="${v.id}">Speichern</button></div>`);
 }
 async function saveEdit(id) {
-  const f = { term: $('#eterm').value.trim(), translation: $('#etrans').value.trim(), note: $('#enote').value.trim() || null, unit: $('#eunit').value.trim() };
-  if (!f.term || !f.translation || !f.unit) return toast('Bitte alle Pflichtfelder ausfüllen', true);
+  const v = PD().vocab.find(x => x.id === id); if (!v) return;
+  const de = isDeLang(v.lang);
+  const f = { term: $('#eterm').value.trim(), translation: de ? packDe($('#ewa').value, $('#eart').value) : $('#etrans').value.trim(), note: $('#enote').value.trim() || null, unit: $('#eunit').value.trim() };
+  if (!f.term || (!de && !f.translation) || !f.unit) return toast('Bitte alle Pflichtfelder ausfüllen', true);
   try { await vocabUpdate(PD(), id, f); closeModal(); toast('Gespeichert'); renderList(); }
   catch (e) { toast('Fehler: ' + e.message, true); }
 }
@@ -1263,7 +1410,7 @@ function renderSettings() {
   <div class="card">
     <h3>Synchronisation</h3>
     <p class="small muted" style="margin-top:0">${CLOUD
-      ? `☁️ Cloud-Modus · angemeldet als ${esc((S.auth && S.auth.email) || '–')}<br>Letzter Abgleich: ${S.prefs.lastSync ? new Date(S.prefs.lastSync).toLocaleString('de-DE') : 'noch nie'}${SYNC.s === 'err' ? '<br>⚠️ ' + esc(SYNC.msg) : ''}`
+      ? `☁️ Cloud-Modus · angemeldet als ${esc((S.auth && S.auth.email) || '–')}<br>Letzter Abgleich: ${S.prefs.lastSync ? new Date(S.prefs.lastSync).toLocaleString('de-DE') : 'noch nie'}${SYNC.s === 'err' ? '<br>⚠️ ' + esc(SYNC.msg) : ''}${S.extWarn ? '<br>⚠️ Deutsch-Lernstand bleibt vorerst nur auf dem Gerät – bitte das SQL-Update ausführen.' : ''}`
       : '📱 Lokaler Testmodus – alle Daten liegen nur auf diesem Gerät. Für die Cloud-Synchronisation config.js ausfüllen.'}</p>
     ${CLOUD ? `<div class="row"><button class="btn grow" data-act="sync-now">🔄 Jetzt abgleichen</button></div>` : ''}
   </div>
@@ -1339,6 +1486,9 @@ const ACT = {
   lang: el => { S.prefs.lang = el.dataset.v; S.prefs.langChosen = true; S.prefs.unit = '*'; savePrefs(); renderHome(); },
   unit: el => { S.prefs.unit = el.dataset.v; savePrefs(); renderHome(); },
   dir: el => { S.prefs.dir = el.dataset.v; savePrefs(); renderHome(); },
+  dedir: el => { S.prefs.deDir = el.dataset.v; savePrefs(); renderHome(); },
+  'dk-play': el => { const it = cur(); const a = deInfo(it.card).art; speak((a ? a + ' ' : '') + it.card.term, 'de', el.dataset.slow ? 0.55 : 0.85); const i = $('#ti'); if (i && !i.disabled) i.focus(); },
+  'dk-show': () => { const p = $('#dkword'); if (!p) return; p.hidden = false; setTimeout(() => { p.hidden = true; }, 2500); },
   mode: el => { S.prefs.mode = el.dataset.v; savePrefs(); renderHome(); },
   start: () => startSession(),
   'start-test': () => startSession('test'),
