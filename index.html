@@ -1113,6 +1113,8 @@ function renderHomeLatin(d, me, extraHtml, subjHtml) {
   document.body.dataset.lang = 'la';
   const seg = (act, items, c) => `<div class="seg">${items.map(([v, l]) => `<button data-act="${act}" data-v="${v}" class="${v === c ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const M = st.math || {}, cats = Object.keys(M).filter(k => k.startsWith('lf-'));
+  const units = unitsOf(d, 'la'); if (P.unit !== '*' && !units.includes(P.unit)) P.unit = '*';
+  const info = laUnitInfo(d, P.unit, kind), unknown = info.p.n - info.words.length;
   $('#v-home').innerHTML = `
   <header class="top"><div><div class="muted small">${esc(fmtDate())}</div><h1>Hey ${esc(me ? me.name : '')} 👋</h1></div>${syncBadge()}</header>
   <div class="statrow">
@@ -1122,11 +1124,17 @@ function renderHomeLatin(d, me, extraHtml, subjHtml) {
   </div>
   ${extraHtml}
   ${subjHtml}
+  ${units.length ? `<div class="label">Unit</div>
+  <div class="chips">${['*', ...units].map(u => `<button data-act="unit" data-v="${esc(u)}" class="chip ${u === P.unit ? 'on' : ''}">${u === '*' ? 'Alle' : esc(u)}</button>`).join('')}</div>` : ''}
   ${dirChips('la', 'lf')}
   <div class="label">Was bestimmen?</div>
   <div class="chips">${LF_KINDS.map(([v, l]) => `<button data-act="lfkind" data-v="${v}" class="chip ${v === kind ? 'on' : ''}">${l}</button>`).join('')}</div>
   <button class="cta" data-act="start-latin">Formen bestimmen · 15 Aufgaben</button>
   <p class="muted small" style="text-align:center;margin-top:10px">${({ v: 'Verben im Aktiv: Präsens bis Futur II.', vp: 'Passiv: Präsens, Imperfekt und Futur I.', vk: 'Konjunktiv: Präsens, Imperfekt, Perfekt und Plusquamperfekt.', nf: 'Infinitive (Präsens Aktiv/Passiv, Perfekt), Partizipien (PPA, PPP) und Imperative.', n: 'Nomen: a-, o- und konsonantische Deklination.' })[kind] || 'Alles gemischt: Aktiv, Passiv, Konjunktiv, Infinitive, Partizipien und Nomen.'} Bei mehrdeutigen Formen zählt jede passende Bestimmung.</p>
+  <div class="card lfinfo"><div class="small">📚 ${esc(info.msg)}</div>
+    ${info.words.length ? `<details class="fx" style="margin-top:8px"><summary class="small">Erkannte Wörter (${info.words.length})</summary><div class="small muted" style="margin-top:6px">${info.words.map(esc).join(' · ')}</div></details>` : ''}
+    ${P.unit !== '*' && unknown > 0 ? `<div class="small muted" style="margin-top:8px">${unknown} ${unknown === 1 ? 'Eintrag wird' : 'Einträge werden'} hier nicht verwendet (z. B. Adjektive, Präpositionen oder Wörter ohne Stammformen). Erkannt werden Verben mit Stammformen wie <i>vocare, voco, vocavi, vocatum</i> und Nomen mit Genitiv wie <i>servus, -i m</i>.</div>` : ''}
+  </div>
   ${cats.length ? `<div class="card"><h3>Bisher</h3>${cats.sort().map(k => { const p = M[k]; return `<div class="urow"><span class="n">${esc(laStatLabel(k))}</span><div class="bar"><i style="width:${pct(p.ok, p.ok + p.wr)}%"></i></div><span class="p">${pct(p.ok, p.ok + p.wr)} %</span></div>`; }).join('')}</div>` : ''}`;
   $$('#v-home .chips').forEach(r => { const on = r.querySelector('.chip.on'); if (on) r.scrollLeft = on.offsetLeft - (r.clientWidth - on.offsetWidth) / 2; });
 }
@@ -1644,9 +1652,9 @@ function laCard(form, right, readings, near, all, src, key) {
     explain: `${form} = ${right}${also.length ? ' · auch möglich: ' + also.join(', ') : ''}`, meta: '🏛️ Formen bestimmen' };
 }
 function buildLatinQueue(kind) {
-  const out = [];
+  const out = [], pools = laUsePools(AD(), S.prefs.unit || '*', kind);
   for (let i = 0; i < 15; i++) {
-    const f = genLatin2(kind);
+    const f = genLatin2(kind, pools);
     out.push({ card: { id: f.key + '#' + i, mkey: f.key, lang: 'la', unit: 'Formen', term: f.q, translation: f.a, ask: f.ask, opts: f.opts, explain: f.explain, sub: f.sub, meta: f.meta }, dir: 'mm' });
   }
   return out;
@@ -2032,10 +2040,10 @@ function genSatzglied() {
 /* ---------- Latein erweitert: Passiv, Konjunktiv, Infinitive, Partizipien, Imperativ ---------- */
 const LA_TRANS = { vocare: 'vocat', laudare: 'laudat', spectare: 'spectat', exspectare: 'exspectat', dare: 'dat', monere: 'monit', videre: 'vis', ridere: 'ris', audire: 'audit', dicere: 'dict', mittere: 'miss', petere: 'petit', capere: 'capt' };
 function laFullTable(v) {
-  const [inf, , k, st, pf] = v, T = {}, act = laVerbTable(v);
-  for (const t of LA_TENSES) T[t] = act[t];
-  const isE = k === 'esse', ppp = LA_TRANS[inf];
-  if (ppp) {
+  const [inf, , k, st, pf] = v, T = {}, isE = k === 'esse', ppp = v[5] !== undefined ? v[5] : LA_TRANS[inf];
+  const act = laVerbTable(v);
+  for (const t of LA_TENSES) if (pf || isE || !['Perfekt', 'Plusquamperfekt', 'Futur II'].includes(t)) T[t] = act[t];
+  if (ppp && inf !== 'facere') {
     T['Präsens Passiv'] = k === 'a' ? [st.slice(0, -1) + 'or', st + 'ris', st + 'tur', st + 'mur', st + 'mini', st + 'ntur']
       : k === 'e' ? [st + 'or', st + 'ris', st + 'tur', st + 'mur', st + 'mini', st + 'ntur']
       : k === 'i' ? [st + 'or', st + 'ris', st + 'tur', st + 'mur', st + 'mini', st + 'untur']
@@ -2050,40 +2058,162 @@ function laFullTable(v) {
   T['Konj. Präsens'] = isE ? ['sim', 'sis', 'sit', 'simus', 'sitis', 'sint'] : ['m', 's', 't', 'mus', 'tis', 'nt'].map(e => ks + e);
   T['Konj. Imperfekt'] = ['m', 's', 't', 'mus', 'tis', 'nt'].map(e => inf + e);
   const P = isE ? 'fu' : pf;
-  T['Konj. Perfekt'] = ['erim', 'eris', 'erit', 'erimus', 'eritis', 'erint'].map(e => P + e);
-  T['Konj. Plusquamperfekt'] = ['issem', 'isses', 'isset', 'issemus', 'issetis', 'issent'].map(e => P + e);
+  if (P) {
+    T['Konj. Perfekt'] = ['erim', 'eris', 'erit', 'erimus', 'eritis', 'erint'].map(e => P + e);
+    T['Konj. Plusquamperfekt'] = ['issem', 'isses', 'isset', 'issemus', 'issetis', 'issent'].map(e => P + e);
+  }
   const N = {};
   N['Infinitiv Präsens Aktiv'] = inf;
-  N['Infinitiv Perfekt Aktiv'] = P + 'isse';
+  if (P) N['Infinitiv Perfekt Aktiv'] = P + 'isse';
   if (!isE) {
-    N['Imperativ Singular'] = inf === 'dicere' ? 'dic' : k === 'k' || k === 'ki' ? st + 'e' : st;
+    N['Imperativ Singular'] = ({ dicere: 'dic', ducere: 'duc', facere: 'fac', ferre: 'fer' })[inf] || (k === 'k' || k === 'ki' ? st + 'e' : st);
     N['Imperativ Plural'] = k === 'k' || k === 'ki' ? st + 'ite' : st + 'te';
     N['Partizip Präsens Aktiv (PPA)'] = k === 'a' || k === 'e' ? st + 'ns' : k === 'ki' ? st + 'iens' : st + 'ens';
   } else { N['Imperativ Singular'] = 'es'; N['Imperativ Plural'] = 'este'; }
-  if (ppp) { N['Infinitiv Präsens Passiv'] = k === 'k' || k === 'ki' ? st + 'i' : inf.slice(0, -1) + 'i'; N['Partizip Perfekt Passiv (PPP)'] = ppp + 'us'; }
+  if (ppp) { if (inf !== 'facere') N['Infinitiv Präsens Passiv'] = k === 'k' || k === 'ki' ? st + 'i' : inf.slice(0, -1) + 'i'; N['Partizip Perfekt Passiv (PPP)'] = ppp + 'us'; }
   return { T, N };
 }
 function laLabels(F) {
   const out = [];
-  for (const [t, arr] of Object.entries(F.T)) arr.forEach((f, i) => {
-    const lab = t.startsWith('Konj. ') ? `${LA_PERS[i]} ${t}` : t.endsWith(' Passiv') ? `${LA_PERS[i]} ${t}` : `${LA_PERS[i]} ${t}`;
-    out.push([lab, f, t]);
-  });
+  for (const [t, arr] of Object.entries(F.T)) arr.forEach((f, i) => out.push([`${LA_PERS[i]} ${t}`, f, t]));
   for (const [lab, f] of Object.entries(F.N)) out.push([lab, f, lab]);
   return out;
 }
-function genLatin2(kind) {
-  if (kind === 'n' || (kind === 'all' && Math.random() < .3) || (kind === 'vn' && Math.random() < .45)) return genLatin('n');
-  const pool = kind === 'vp' ? LA_VERBS.filter(v => LA_TRANS[v[0]]) : LA_VERBS;
-  const v = pick(pool), F = laFullTable(v), L = laLabels(F);
+
+/* Eigene Latein-Vokabeln erkennen: Verben mit Stammformen, Nomen mit Genitiv */
+Object.assign(LA_END, {
+  omr: [[null, 'i', 'o', 'um', 'o'], ['i', 'orum', 'is', 'os', 'is']],
+  ki: [[null, 'is', 'i', 'em', 'e'], ['es', 'ium', 'ibus', 'es', 'ibus']],
+  kn: [[null, 'is', 'i', null, 'e'], ['a', 'um', 'ibus', 'a', 'ibus']],
+  kni: [[null, 'is', 'i', null, 'i'], ['ia', 'ium', 'ibus', 'ia', 'ibus']],
+  u: [['us', 'us', 'ui', 'um', 'u'], ['us', 'uum', 'ibus', 'us', 'ibus']],
+  e5: [['es', 'ei', 'ei', 'em', 'e'], ['es', 'erum', 'ebus', 'es', 'ebus']]
+});
+const LA_DEKL = { a: 'a-Deklination', om: 'o-Deklination', omr: 'o-Deklination', on: 'o-Deklination (Neutrum)', k: 'konsonantische Deklination', ki: 'i-/Mischdeklination', kn: 'konsonantische Deklination (Neutrum)', kni: 'i-Deklination (Neutrum)', u: 'u-Deklination', e5: 'e-Deklination' };
+const LA_KONJ = { a: 'a-Konjugation', e: 'e-Konjugation', i: 'i-Konjugation', k: 'konsonantische Konjugation', ki: 'kons. Konjugation mit i-Erweiterung', esse: 'esse' };
+const laClean = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/[;\/+]/g, ',').replace(/[^a-z,\s.-]/g, ' ');
+const laToks = s => laClean(s).split(/[,\s]+/).map(x => x.replace(/\.$/, '')).filter(Boolean);
+function laFill(base, suf) {   // "-avi" an "voc" anhängen, "-oris" an "mercator"
+  const i = base.lastIndexOf(suf[0]);
+  return (i > 0 ? base.slice(0, i) : base) + suf;
+}
+const LA_SKIP = new Set(['posse', 'velle', 'nolle', 'malle', 'ferre', 'ire', 'fieri', 'adire', 'abire', 'exire', 'redire', 'inire', 'transire', 'perire', 'afferre', 'auferre', 'referre', 'inferre', 'offerre']);
+function laParseVerb(term, mean) {
+  const t = laToks(term);
+  const inf = t.find(x => x === 'esse' || /^[a-z]{2,}(are|ere|ire)$/.test(x));
+  if (!inf || LA_SKIP.has(inf) || (/esse$/.test(inf) && inf !== 'esse')) return null;
+  if (inf === 'esse') return ['esse', mean, 'esse', '', ''];
+  const known = LA_VERBS.find(v => v[0] === inf);
+  const base = inf.slice(0, -3), full = x => x.startsWith('-') ? base + x.slice(1) : x;
+  const rest = t.filter(x => x !== inf && !/^(m|f|n|tr|intr|trans|akk|dat|abl|gen|aliquem|aliquid|alicui|ad|in|cum|de|ex|ab|a|e)$/.test(x)).map(full);
+  const sg1 = rest.find(x => /o$/.test(x) && x.length >= 3);
+  const pfT = rest.find(x => /i$/.test(x) && x.length >= 3 && x !== sg1);
+  const supT = rest.find(x => /(um|us)$/.test(x) && !/(urum|urus)$/.test(x));
+  let k;
+  if (/are$/.test(inf)) k = 'a';
+  else if (/ire$/.test(inf)) k = 'i';
+  else if (sg1) k = /eo$/.test(sg1) ? 'e' : /io$/.test(sg1) ? 'ki' : 'k';
+  else if (known) k = known[2];
+  else return null;   // -ere ohne 1. Person: e- oder kons. Konjugation unklar
+  const st = k === 'k' || k === 'ki' ? inf.slice(0, -3) : inf.slice(0, -2);
+  const pf = pfT ? pfT.slice(0, -1) : known ? known[4] : '';
+  const ppp = supT ? supT.slice(0, -2) : known && LA_TRANS[inf] ? LA_TRANS[inf] : null;
+  return [inf, mean, k, st, pf, ppp];
+}
+function laParseNoun(term, mean) {
+  const t = laToks(term);
+  if (t.length < 1 || t.length > 4) return null;
+  const g = t.find(x => /^(m|f|n)$/.test(x)), nom = t[0];
+  if (!/^[a-z]{2,}$/.test(nom)) return null;
+  const others = t.slice(1).filter(x => !/^(m|f|n)$/.test(x));
+  if (others.some(x => /^-?(a|um)$/.test(x)) && others.length >= 2) return null;   // Adjektiv: bonus, -a, -um
+  let gen = others[0] || '';
+  if (gen.startsWith('-')) {
+    const s2 = gen.slice(1);
+    gen = s2 === 'ae' ? nom.slice(0, -1) + 'ae' : s2 === 'i' ? (/(us|um)$/.test(nom) ? nom.slice(0, -2) + 'i' : nom + 'i') : s2 === 'us' ? nom : s2 === 'ei' ? nom.slice(0, -2) + 'ei'
+      : laFill(/en$/.test(nom) ? nom.slice(0, -2) : nom, s2);
+  }
+  if (gen && !/^[a-z]{2,}$/.test(gen)) return null;
+  if (!gen) {
+    if (/a$/.test(nom) && g !== 'n') return [nom, mean, 'a', nom.slice(0, -1)];
+    if (/um$/.test(nom)) return [nom, mean, 'on', nom.slice(0, -2)];
+    if (/us$/.test(nom) && g !== 'n' && g !== 'f') return [nom, mean, 'om', nom.slice(0, -2)];
+    return null;
+  }
+  if (/ae$/.test(gen)) return [nom, mean, 'a', gen.slice(0, -2)];
+  if (/ei$/.test(gen) && /es$/.test(nom)) return [nom, mean, 'e5', gen.slice(0, -2)];
+  if (/us$/.test(gen) && /us$/.test(nom) && gen === nom && g !== 'n') return [nom, mean, 'u', nom.slice(0, -2)];
+  if (/is$/.test(gen)) {
+    const st = gen.slice(0, -2);
+    if (g === 'n') return [nom, mean, /(e|al|ar)$/.test(nom) ? 'kni' : 'kn', st];
+    const pari = /(is|es)$/.test(nom) && nom.length === gen.length;
+    const two = /[^aeiouy][^aeiouy]$/.test(st) && !/(tr|br|gr)$/.test(st);
+    return [nom, mean, pari || two ? 'ki' : 'k', st];
+  }
+  if (/i$/.test(gen)) {
+    const st = gen.slice(0, -1);
+    if (/um$/.test(nom) || g === 'n') return [nom, mean, 'on', st];
+    if (/us$/.test(nom)) return [nom, mean, 'om', st];
+    return [nom, mean, 'omr', st];
+  }
+  return null;
+}
+const LA_POOLS = {};
+function laPools(d, unit) {
+  const cards = d ? cardsFor(d, 'la', unit) : [], key = d ? d.lid + '|' + unit + '|' + cards.length + '|' + cards.map(c => c.id).join('').length : '';
+  if (LA_POOLS.k === key) return LA_POOLS.v;
+  const verbs = [], nouns = [], seen = new Set();
+  for (const c of cards) {
+    const mean = String(c.translation || '').split(/[;,]/)[0].trim();
+    const v = laParseVerb(c.term, mean);
+    if (v) { if (!seen.has(v[0])) { seen.add(v[0]); verbs.push(v); } continue; }
+    const n = laParseNoun(c.term, mean);
+    if (n && !seen.has(n[0])) { seen.add(n[0]); nouns.push(n); }
+  }
+  LA_POOLS.k = key; LA_POOLS.v = { verbs, nouns, n: cards.length };
+  return LA_POOLS.v;
+}
+const laHasPPP = v => v[0] !== 'facere' && (v[5] !== undefined ? !!v[5] : !!LA_TRANS[v[0]]);
+function laUsePools(d, unit, kind) {   // Wörter der Unit; fehlt etwas, dann die eingebauten
+  const p = laPools(d, unit), own = unit !== '*';
+  const mine = kind === 'vp' ? p.verbs.filter(laHasPPP) : p.verbs;
+  const builtV = kind === 'vp' ? LA_VERBS.filter(laHasPPP) : LA_VERBS;
+  const mergeBy = (a, b) => a.concat(b.filter(x => !a.some(y => y[0] === x[0])));
+  const verbs = own ? (mine.length ? mine : builtV) : mergeBy(mine, builtV);
+  const nouns = own ? (p.nouns.length ? p.nouns : LA_NOUNS) : mergeBy(p.nouns, LA_NOUNS);
+  return { verbs, nouns, ownV: mine.length > 0, ownN: p.nouns.length > 0 };
+}
+function genLaNoun(nouns) {
+  const n = pick(nouns), T = laNounTable(n), labels = Object.keys(T), right = pick(labels), form = T[right];
+  const readings = labels.filter(l => T[l] === form), [cs, num] = right.split(' ');
+  const near = labels.filter(l => !readings.includes(l) && (l.startsWith(cs) || l.endsWith(num)));
+  return laCard(form, right, readings, near, labels, `von ${n[0]} (${n[1]})`, 'lf-n-' + cs);
+}
+function genLatin2(kind, pools) {
+  pools = pools || { verbs: LA_VERBS, nouns: LA_NOUNS };
+  if (!pools.verbs.length || kind === 'n' || (kind === 'all' && Math.random() < .3) || (kind === 'vn' && Math.random() < .45)) return genLaNoun(pools.nouns.length ? pools.nouns : LA_NOUNS);
+  const pool = kind === 'vp' ? pools.verbs.filter(laHasPPP) : pools.verbs;
+  const v = pick(pool.length ? pool : LA_VERBS.filter(x => LA_TRANS[x[0]])), F = laFullTable(v), L = laLabels(F);
   const want = kind === 'vp' ? x => x[2].endsWith(' Passiv') : kind === 'vk' ? x => x[2].startsWith('Konj.') : kind === 'nf' ? x => x[0] === x[2]
     : kind === 'v' || kind === 'vn' ? x => LA_TENSES.includes(x[2]) : () => true;
-  const cand = L.filter(want); if (!cand.length) return genLatin('v');
+  const cand = L.filter(want); if (!cand.length) return genLaNoun(pools.nouns.length ? pools.nouns : LA_NOUNS);
   const [right, form, grp] = pick(cand);
   const readings = L.filter(x => x[1] === form).map(x => x[0]);
   const near = cand.filter(x => !readings.includes(x[0]) && (x[2] === grp || x[0].slice(0, 12) === right.slice(0, 12))).map(x => x[0]);
   const key = 'lf-' + (grp.endsWith(' Passiv') ? 'p-' + grp.replace(' Passiv', '') : grp.startsWith('Konj. ') ? 'k-' + grp.slice(6) : LA_TENSES.includes(grp) ? 'v-' + grp : 'f-' + grp.replace(/ \(.*\)/, ''));
   return laCard(form, right, readings, near, cand.map(x => x[0]), `von ${v[0]} (${v[1]})`, key);
+}
+function laUnitInfo(d, unit, kind) {
+  const p = laPools(d, unit), u = laUsePools(d, unit, kind);
+  const needV = kind !== 'n', needN = kind === 'n' || kind === 'all';
+  const words = [...p.verbs.map(v => `${v[0]} – ${LA_KONJ[v[2]]}${v[4] || v[2] === 'esse' ? '' : ', ohne Perfektstamm'}`), ...p.nouns.map(n => `${n[0]} – ${LA_DEKL[n[2]]}`)];
+  let msg;
+  if (unit === '*') msg = p.verbs.length + p.nouns.length ? `Geübt wird mit deinen Wörtern aus allen Units (${p.verbs.length} Verben, ${p.nouns.length} Nomen) und den eingebauten Wörtern.` : 'Geübt wird mit den eingebauten Wörtern.';
+  else {
+    const miss = [needV && !u.ownV ? (kind === 'vp' ? 'Verben mit PPP' : 'Verben') : null, needN && !u.ownN ? 'Nomen' : null].filter(Boolean);
+    msg = `Aus „${unit}“ erkannt: ${p.verbs.length} Verben, ${p.nouns.length} Nomen.` + (miss.length ? ` Für ${miss.join(' und ')} werden die eingebauten Wörter verwendet.` : '');
+  }
+  return { msg, words, p };
 }
 const laStatLabel = k => { const t = k.slice(5); return k.startsWith('lf-p-') ? t + ' Passiv' : k.startsWith('lf-k-') ? 'Konj. ' + t : t; };
 const LF_KINDS = [['v', 'Aktiv'], ['vp', 'Passiv'], ['vk', 'Konjunktiv'], ['nf', 'Infinitive & Partizipien'], ['n', 'Nomen'], ['all', 'Mix']];
