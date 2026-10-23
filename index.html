@@ -108,6 +108,8 @@ textarea.field{min-height:180px;font-size:16px;resize:vertical;line-height:1.5}
 .vrow{display:flex;width:100%;gap:10px;align-items:center;text-align:left;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text);padding:11px 2px;font:inherit;font-size:15px}
 .vrow b{flex:1;font-weight:600;word-break:break-word} .vrow span{flex:1;color:var(--muted);word-break:break-word}
 .boxes{font-size:11px;color:var(--muted);white-space:nowrap}
+.reward{border-left:5px solid #f59e0b} .reward.done{border-left-color:var(--ok);background:var(--okbg)}
+body[data-lang="ma"]{--lang:#10b981} body[data-lang="wi"]{--lang:#0ea5e9} body[data-lang="de"]{--lang:#111827}
 .srow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
 .srow:last-child{border:0} .srow .btn{padding:9px 12px;font-size:14px;flex:none}
 .lock{text-align:center;padding-top:24px} .lock .e{font-size:48px}
@@ -156,8 +158,10 @@ textarea.field{min-height:180px;font-size:16px;resize:vertical;line-height:1.5}
 const C = window.VT_CONFIG || {};
 const LANGS = C.languages || { en: { name: 'Englisch', flag: '🇬🇧', speech: 'en-GB' } };
 if (!LANGS.de) LANGS.de = { name: 'Deutsch', flag: '🇩🇪', speech: 'de-DE' };   // Deutsch-Übungen (Wortarten, Artikel, Diktat)
+if (!LANGS.wi) LANGS.wi = { name: 'Wissen', flag: '💡', speech: null };          // Frage-Antwort-Karten (Sachunterricht, Geschichte, Bio …)
+const MATH = { name: 'Mathe', flag: '🧮' };                                          // Mathe-Trainer: Aufgaben werden erzeugt, nicht importiert
 const CLOUD = !!(C.supabaseUrl && C.supabaseKey);
-const VERSION = '1.4';
+const VERSION = '1.5';
 const PARENT = '__parent';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -204,7 +208,7 @@ const learner = id => S.learners.find(l => l.id === id);
 const sortLearners = () => S.learners.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
 
 /* ---------- Daten je Lernprofil ---------- */
-const DEFAULT_STATE = { goal: 20, settingsAt: null, xp: 0, streak: 0, lastDay: null, today: { day: null, count: 0 }, updated_at: null };
+const DEFAULT_STATE = { goal: 20, settingsAt: null, xp: 0, streak: 0, lastDay: null, today: { day: null, count: 0 }, showMath: true, reward: null, math: {}, updated_at: null };
 const DB = {};
 function data(lid) {
   if (!lid || lid === PARENT) return null;
@@ -258,6 +262,10 @@ function mergeState(a, b) {
   m.today = ta.day === tb.day ? { day: ta.day || null, count: Math.max(ta.count || 0, tb.count || 0) } : ((ta.day || '') > (tb.day || '') ? ta : tb);
   const sa = ts(a.settingsAt) >= ts(b.settingsAt) ? a : b;
   m.goal = sa.goal || 20; m.settingsAt = sa.settingsAt || null;
+  m.showMath = sa.showMath !== false; m.reward = sa.reward || null;
+  const ma = a.math || {}, mb = b.math || {};
+  m.math = Object.assign({}, mb);
+  for (const k of Object.keys(ma)) if (!mb[k] || ts(ma[k].t) >= ts(mb[k].t)) m.math[k] = ma[k];
   m.updated_at = ts(a.updated_at) >= ts(b.updated_at) ? a.updated_at : b.updated_at;
   return m;
 }
@@ -307,7 +315,103 @@ function dirsFor(c) {
   return out;
 }
 function eligibleDirs(c, dir) { const all = dirsFor(c); return dir === 'mix' ? all : all.filter(x => x === dir); }
-const curDir = lang => isDeLang(lang) ? (S.prefs.deDir || 'wa') : S.prefs.dir;
+const isWi = lang => lang === 'wi';
+const curDir = lang => isDeLang(lang) ? (S.prefs.deDir || 'wa') : isWi(lang) ? (S.prefs.wiDir || 'fd') : S.prefs.dir;
+
+/* Unregelmäßige Verben: term = "go – went – gone" → Abfrage aller drei Formen */
+function verbForms(c) {
+  if (!c || c.lang !== 'en') return null;
+  const f = String(c.term).split(/\s+[–—-]\s+/).map(x => x.trim());
+  return f.length === 3 && f.every(Boolean) ? f : null;
+}
+const IRREGULAR = [
+  ['be', 'was/were', 'been', 'sein'], ['become', 'became', 'become', 'werden'], ['begin', 'began', 'begun', 'beginnen, anfangen'],
+  ['bite', 'bit', 'bitten', 'beißen'], ['blow', 'blew', 'blown', 'blasen, wehen'], ['break', 'broke', 'broken', 'brechen, kaputt machen'],
+  ['bring', 'brought', 'brought', 'bringen, mitbringen'], ['build', 'built', 'built', 'bauen'], ['buy', 'bought', 'bought', 'kaufen'],
+  ['catch', 'caught', 'caught', 'fangen'], ['choose', 'chose', 'chosen', 'wählen, aussuchen'], ['come', 'came', 'come', 'kommen'],
+  ['cost', 'cost', 'cost', 'kosten'], ['cut', 'cut', 'cut', 'schneiden'], ['do', 'did', 'done', 'tun, machen'],
+  ['draw', 'drew', 'drawn', 'zeichnen'], ['dream', 'dreamt/dreamed', 'dreamt/dreamed', 'träumen'], ['drink', 'drank', 'drunk', 'trinken'],
+  ['drive', 'drove', 'driven', 'fahren'], ['eat', 'ate', 'eaten', 'essen'], ['fall', 'fell', 'fallen', 'fallen, hinfallen'],
+  ['feed', 'fed', 'fed', 'füttern'], ['feel', 'felt', 'felt', 'fühlen, sich fühlen'], ['fight', 'fought', 'fought', 'kämpfen, sich streiten'],
+  ['find', 'found', 'found', 'finden'], ['fly', 'flew', 'flown', 'fliegen'], ['forget', 'forgot', 'forgotten', 'vergessen'],
+  ['get', 'got', 'got/gotten', 'bekommen, holen, werden'], ['give', 'gave', 'given', 'geben'], ['go', 'went', 'gone', 'gehen, fahren'],
+  ['grow', 'grew', 'grown', 'wachsen, anbauen'], ['hang', 'hung', 'hung', 'hängen'], ['have', 'had', 'had', 'haben'],
+  ['hear', 'heard', 'heard', 'hören'], ['hide', 'hid', 'hidden', 'verstecken, sich verstecken'], ['hit', 'hit', 'hit', 'schlagen, treffen'],
+  ['hold', 'held', 'held', 'halten'], ['hurt', 'hurt', 'hurt', 'verletzen, wehtun'], ['keep', 'kept', 'kept', 'behalten, aufbewahren'],
+  ['know', 'knew', 'known', 'wissen, kennen'], ['lay', 'laid', 'laid', 'legen, hinlegen'], ['lead', 'led', 'led', 'führen, leiten'],
+  ['learn', 'learnt/learned', 'learnt/learned', 'lernen'], ['leave', 'left', 'left', 'verlassen, abfahren, lassen'], ['lend', 'lent', 'lent', 'leihen, verleihen'],
+  ['let', 'let', 'let', 'lassen'], ['lie', 'lay', 'lain', 'liegen'], ['lose', 'lost', 'lost', 'verlieren'],
+  ['make', 'made', 'made', 'machen, herstellen'], ['mean', 'meant', 'meant', 'bedeuten, meinen'], ['meet', 'met', 'met', 'treffen, kennenlernen'],
+  ['pay', 'paid', 'paid', 'bezahlen'], ['put', 'put', 'put', 'legen, stellen, setzen'], ['read', 'read', 'read', 'lesen'],
+  ['ride', 'rode', 'ridden', 'reiten, fahren'], ['ring', 'rang', 'rung', 'klingeln, anrufen'], ['rise', 'rose', 'risen', 'steigen, aufgehen'],
+  ['run', 'ran', 'run', 'rennen, laufen'], ['say', 'said', 'said', 'sagen'], ['see', 'saw', 'seen', 'sehen'],
+  ['sell', 'sold', 'sold', 'verkaufen'], ['send', 'sent', 'sent', 'schicken, senden'], ['shine', 'shone', 'shone', 'scheinen, leuchten'],
+  ['shoot', 'shot', 'shot', 'schießen'], ['show', 'showed', 'shown', 'zeigen'], ['shut', 'shut', 'shut', 'schließen, zumachen'],
+  ['sing', 'sang', 'sung', 'singen'], ['sit', 'sat', 'sat', 'sitzen'], ['sleep', 'slept', 'slept', 'schlafen'],
+  ['speak', 'spoke', 'spoken', 'sprechen'], ['spend', 'spent', 'spent', 'ausgeben, verbringen'], ['stand', 'stood', 'stood', 'stehen'],
+  ['steal', 'stole', 'stolen', 'stehlen'], ['swim', 'swam', 'swum', 'schwimmen'], ['take', 'took', 'taken', 'nehmen, bringen'],
+  ['teach', 'taught', 'taught', 'unterrichten, beibringen'], ['tell', 'told', 'told', 'erzählen, sagen'], ['think', 'thought', 'thought', 'denken, glauben'],
+  ['throw', 'threw', 'thrown', 'werfen'], ['understand', 'understood', 'understood', 'verstehen'], ['wake', 'woke', 'woken', 'aufwachen, wecken'],
+  ['wear', 'wore', 'worn', 'tragen, anhaben'], ['win', 'won', 'won', 'gewinnen'], ['write', 'wrote', 'written', 'schreiben']
+];
+
+/* ---------- Mathe-Trainer (Klasse 3/4): Aufgaben werden erzeugt, Lernstand je Aufgabe in state.math ---------- */
+const MA_MODES = [['mul', '· Mal'], ['div', ': Geteilt'], ['add', '+/−'], ['mix', 'Mix']];
+const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+function mathFact(key) {   // m7x8 = 8 · 7 (7er-Reihe), d7x8 = 56 : 7
+  const m = key.match(/^([md])(\d+)x(\d+)$/); if (!m) return null;
+  const r = +m[2], n = +m[3];
+  return m[1] === 'm' ? { key, row: r, q: Math.random() < .5 ? `${n} · ${r}` : `${r} · ${n}`, a: r * n, op: 'mul' }
+                      : { key, row: r, q: `${r * n} : ${r}`, a: n, op: 'div' };
+}
+function genPlusMinus() {
+  const t = randInt(1, 4);
+  if (t === 1) { const a = 10 * randInt(10, 85), b = 10 * randInt(1, 100 - a / 10 - 1); return { key: 'k+', q: `${a} + ${b}`, a: a + b }; }
+  if (t === 2) { const a = randInt(12, 89), b = randInt(11, 99 - a > 11 ? 99 - a : 11); return { key: 'k+', q: `${a} + ${b}`, a: a + b }; }
+  if (t === 3) { const a = 10 * randInt(20, 100), b = 10 * randInt(1, a / 10 - 1); return { key: 'k-', q: `${a} − ${b}`, a: a - b }; }
+  const a = randInt(31, 99), b = randInt(11, a - 5); return { key: 'k-', q: `${a} − ${b}`, a: a - b };
+}
+function mathWeight(p, t) {
+  if (!p || !p.b) return 3;
+  if (p.due && p.due <= t) return 8;
+  return ({ 1: 5, 2: 2, 3: 1, 4: .5, 5: .25 })[p.b] || 1;
+}
+function buildMathQueue(d, { op, row }) {
+  const t = dayStr(), M = d.state.math || {}, rows = row === '*' ? [2, 3, 4, 5, 6, 7, 8, 9, 10] : [+row];
+  const ops = op === 'mix' ? ['m', 'd'] : op === 'mul' ? ['m'] : op === 'div' ? ['d'] : [];
+  const cand = [];
+  for (const r of rows) for (let n = 1; n <= 10; n++) for (const o of ops) { const k = `${o}${r}x${n}`; cand.push({ k, w: mathWeight(M[k], t) }); }
+  const want = op === 'add' ? 0 : op === 'mix' ? 14 : 20, picked = [];
+  while (picked.length < want && cand.length) {   // gewichtete Auswahl ohne Zurücklegen: Schwieriges öfter
+    let sum = cand.reduce((s, c) => s + c.w, 0), x = Math.random() * sum, i = 0;
+    while (i < cand.length - 1 && (x -= cand[i].w) > 0) i++;
+    picked.push(mathFact(cand.splice(i, 1)[0].k));
+  }
+  const pm = op === 'add' ? 20 : op === 'mix' ? 6 : 0;
+  for (let i = 0; i < pm; i++) picked.push(genPlusMinus());
+  return shuffle(picked).map((f, i) => ({
+    card: { id: f.key + '#' + i, mkey: f.key, lang: 'ma', unit: f.row ? `${f.row}er-Reihe` : 'Kopfrechnen', term: f.q, translation: String(f.a) }, dir: 'mm'
+  }));
+}
+function gradeMath(d, key, ok) {
+  const M = d.state.math || (d.state.math = {});
+  const p = Object.assign({ b: 0, ok: 0, wr: 0 }, M[key]);
+  if (ok) { p.b = p.b === 0 ? 2 : Math.min(5, p.b + 1); p.ok++; } else { p.b = 1; p.wr++; }
+  p.due = addDays(ok ? INTERVAL[p.b] : 1); p.t = nowIso();
+  M[key] = p;
+}
+function mathRowStats(d, r) {
+  const M = d.state.math || {}; let sum = 0, done = 0;
+  for (let n = 1; n <= 10; n++) for (const o of ['m', 'd']) { const p = M[`${o}${r}x${n}`]; if (p) { done++; sum += p.b || 0; } }
+  return { done, pct: pct(sum, 100) };
+}
+
+/* ---------- Belohnungsziel ---------- */
+function rewardInfo(st) {
+  const r = st.reward; if (!r || !r.title || !r.target) return null;
+  const got = Math.max(0, (st.xp || 0) - (r.base || 0));
+  return { title: r.title, target: r.target, got: Math.min(got, r.target), done: got >= r.target };
+}
 
 const promptOf = it => it.dir === 'df' ? it.card.translation : it.card.term;
 function answerOf(it) {
@@ -315,6 +419,7 @@ function answerOf(it) {
   if (it.dir === 'fd') return c.translation;
   if (it.dir === 'wa') return deInfo(c).wa;
   if (it.dir === 'ar') return deInfo(c).art;
+  if (it.dir === 'mm') return c.translation;
   return c.term;   // df, dk
 }
 const solOf = it => it.dir === 'ar' ? deInfo(it.card).art + ' ' + it.card.term : answerOf(it);
@@ -831,7 +936,18 @@ function renderHome() {
     return;
   }
   const P = S.prefs, st = d.state, me = learner(d.lid);
-  if (!P.langChosen || !LANGS[P.lang]) P.lang = bestLang(d, P.lang);
+  const showMath = st.showMath !== false;
+  if (P.lang === 'ma' && !showMath) P.lang = bestLang(d, '');
+  if (P.lang !== 'ma' && (!P.langChosen || !LANGS[P.lang])) P.lang = bestLang(d, P.lang);
+  const subjects = Object.entries(LANGS).concat(showMath ? [['ma', MATH]] : []);
+  const rw = rewardInfo(st);
+  const rewardHtml = rw ? `<div class="card reward ${rw.done ? 'done' : ''}">
+    <div class="row" style="margin:0;justify-content:space-between;align-items:center"><b>🎁 ${esc(rw.title)}</b><span class="small muted">${rw.got} / ${rw.target} XP</span></div>
+    <div class="bar ${rw.done ? 'done' : ''}" style="height:10px;margin-top:8px"><i style="width:${pct(rw.got, rw.target)}%"></i></div>
+    ${rw.done ? `<div class="small" style="margin-top:8px">🎉 Geschafft! Zeig das deinen Eltern.</div>` : ''}</div>` : '';
+  const subjHtml = `<div class="label">Fach</div>
+  <div class="chips">${subjects.map(([k, l]) => `<button data-act="lang" data-v="${k}" class="chip ${k === P.lang ? 'on' : ''}">${l.flag} ${esc(l.name)}</button>`).join('')}</div>`;
+  if (P.lang === 'ma') return renderHomeMath(d, me, rewardHtml, subjHtml);
   document.body.dataset.lang = P.lang;
   const units = unitsOf(d, P.lang);
   if (P.unit !== '*' && !units.includes(P.unit)) P.unit = '*';
@@ -851,26 +967,58 @@ function renderHome() {
     <div class="stat"><div class="big">⭐ Lvl ${lv.lvl}</div><div class="bar"><i style="width:${pct(lv.cur, lv.need)}%"></i></div><div class="muted small">${lv.cur}/${lv.need} XP</div></div>
     <div class="stat"><div class="big">🎯 ${tc}/${goal}</div><div class="bar ${tc >= goal ? 'done' : ''}"><i style="width:${pct(tc, goal)}%"></i></div><div class="muted small">heute</div></div>
   </div>
-  <div class="label">Sprache</div>
-  ${Object.keys(LANGS).length > 3
-    ? `<div class="chips">${Object.entries(LANGS).map(([k, l]) => `<button data-act="lang" data-v="${k}" class="chip ${k === P.lang ? 'on' : ''}">${l.flag} ${esc(l.name)}</button>`).join('')}</div>`
-    : seg('lang', Object.entries(LANGS).map(([k, l]) => [k, l.flag + ' ' + esc(l.name)]), P.lang)}
+  ${rewardHtml}
+  ${subjHtml}
   <div class="label">Unit</div>
   <div class="chips">${['*', ...units].map(u => `<button data-act="unit" data-v="${esc(u)}" class="chip ${u === P.unit ? 'on' : ''}">${u === '*' ? 'Alle' : esc(u)}</button>`).join('')}</div>
   ${de ? `<div class="label">Übung</div>
-  ${seg('dedir', [['wa', '🏷️ Wortart'], ['ar', 'Artikel'], ['dk', '🔊 Diktat'], ['mix', 'Mix']], dir)}` : `<div class="label">Richtung</div>
+  ${seg('dedir', [['wa', '🏷️ Wortart'], ['ar', 'Artikel'], ['dk', '🔊 Diktat'], ['mix', 'Mix']], dir)}` : isWi(P.lang) ? `<div class="label">Richtung</div>
+  ${seg('widir', [['fd', 'Fragen'], ['df', 'Umgekehrt'], ['mix', 'Gemischt']], dir)}
+  <div class="label">Abfrage</div>
+  ${seg('mode', [['type', '⌨️ Tippen'], ['mc', '🔘 Auswahl'], ['flip', '🃏 Karte']], P.mode)}` : `<div class="label">Richtung</div>
   ${seg('dir', [['fd', code + ' → DE'], ['df', 'DE → ' + code], ['mix', 'Gemischt']], P.dir)}
   <div class="label">Abfrage</div>
   ${seg('mode', [['type', '⌨️ Tippen'], ['mc', '🔘 Auswahl'], ['flip', '🃏 Karte']], P.mode)}`}
   ${all.length === 0 ? `
-    <div class="card empty"><div class="e">📭</div><h3>Noch keine ${esc(L.name)}-${de ? 'Wörter' : 'Vokabeln'}</h3>
-    <p class="muted small">Im Eltern-Bereich 🔒 können ${de ? 'Wörter' : 'Vokabeln'} importiert werden.</p></div>` : total === 0 ? `
+    <div class="card empty"><div class="e">📭</div><h3>Noch keine ${esc(L.name)}-${de ? 'Wörter' : isWi(P.lang) ? 'Karten' : 'Vokabeln'}</h3>
+    <p class="muted small">Im Eltern-Bereich 🔒 können ${de ? 'Wörter' : isWi(P.lang) ? 'Karten' : 'Vokabeln'} importiert werden.</p></div>` : total === 0 ? `
     <div class="card empty"><div class="e">🤔</div><h3>Für diese Übung fehlen Angaben</h3>
     <p class="muted small">${dir === 'ar' ? 'Für „Artikel“ braucht es Nomen mit der/die/das.' : 'Für „Wortart“ braucht es Wörter mit Wortart.'} Das lässt sich im Eltern-Bereich ergänzen.</p></div>` : `
     <button class="cta" data-act="start" ${q.length ? '' : 'disabled'}>${q.length ? `Los geht's · ${q.length} Karten` : 'Alles erledigt für heute 🎉'}</button>
     <button class="btn ghost wide" data-act="start-test">📝 Alle ${total} üben (Test-Modus)</button>
     <p class="muted small" style="text-align:center;margin-top:10px">Im Test-Modus wird alles abgefragt – ideal vor Klassenarbeiten.</p>`}`;
   $$('#v-home .chips').forEach(row => { const on = row.querySelector('.chip.on'); if (on) row.scrollLeft = on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2; });
+}
+
+function renderHomeMath(d, me, rewardHtml, subjHtml) {
+  const P = S.prefs, st = d.state, lv = levelInfo(st.xp || 0), tc = todayCount(d), goal = st.goal || 20;
+  document.body.dataset.lang = 'ma';
+  const op = P.maOp || 'mul', row = P.maRow || '*';
+  const seg = (act, items, c) => `<div class="seg">${items.map(([v, l]) => `<button data-act="${act}" data-v="${v}" class="${v === c ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const n = op === 'add' ? 20 : row === '*' || op === 'mix' ? 20 : (op === 'mix' ? 20 : 10);
+  $('#v-home').innerHTML = `
+  <header class="top"><div><div class="muted small">${esc(fmtDate())}</div><h1>Hey ${esc(me ? me.name : '')} 👋</h1></div>${syncBadge()}</header>
+  <div class="statrow">
+    <div class="stat"><div class="big">🔥 ${currentStreak(d)}</div><div class="muted small">Tage in Folge</div></div>
+    <div class="stat"><div class="big">⭐ Lvl ${lv.lvl}</div><div class="bar"><i style="width:${pct(lv.cur, lv.need)}%"></i></div><div class="muted small">${lv.cur}/${lv.need} XP</div></div>
+    <div class="stat"><div class="big">🎯 ${tc}/${goal}</div><div class="bar ${tc >= goal ? 'done' : ''}"><i style="width:${pct(tc, goal)}%"></i></div><div class="muted small">heute</div></div>
+  </div>
+  ${rewardHtml}
+  ${subjHtml}
+  <div class="label">Übung</div>
+  ${seg('maop', MA_MODES, op)}
+  ${op !== 'add' ? `<div class="label">Reihe</div>
+  <div class="chips">${['*', 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => { const s = r === '*' ? null : mathRowStats(d, r);
+    return `<button data-act="marow" data-v="${r}" class="chip ${String(r) === String(row) ? 'on' : ''}">${r === '*' ? 'Alle' : r + 'er'}${s && s.done ? ` · ${s.pct}%` : ''}</button>`; }).join('')}</div>` : ''}
+  <button class="cta" data-act="start-math">Los geht's · ${n} Aufgaben</button>
+  <p class="muted small" style="text-align:center;margin-top:10px">${op === 'add' ? 'Plus und Minus im Kopf, Zahlen bis 1000.' : 'Aufgaben, die noch nicht sitzen, kommen öfter dran. Prozent = wie gut eine Reihe schon sitzt.'}</p>`;
+  $$('#v-home .chips').forEach(r => { const on = r.querySelector('.chip.on'); if (on) r.scrollLeft = on.offsetLeft - (r.clientWidth - on.offsetWidth) / 2; });
+}
+function startMath() {
+  const d = AD(); if (!d) return;
+  const q = buildMathQueue(d, { op: S.prefs.maOp || 'mul', row: S.prefs.maRow || '*' });
+  SES = { d, queue: q, i: 0, combo: 0, xp: 0, mode: 'type', practice: false };
+  show('session');
 }
 
 /* ============================================================
@@ -907,17 +1055,21 @@ function waOptions() {
 function renderQ() {
   if (!SES) return show('home');
   const it = cur(), c = it.card, fd = it.dir === 'fd', L = LANGS[c.lang] || {};
-  const de = isDeLang(c.lang), dk = it.dir === 'dk';
+  const de = isDeLang(c.lang), dk = it.dir === 'dk', ma = c.lang === 'ma', wi = isWi(c.lang);
+  const vf = it.dir === 'df' ? verbForms(c) : null;
   document.body.dataset.lang = c.lang;
   let mode = SES.mode;
-  if (de) {
+  if (ma) mode = 'type';
+  else if (vf && mode === 'type') mode = 'verb';
+  else if (de) {
     if (it.dir === 'wa') { mode = 'mc'; it.opts = waOptions(); }
     else if (it.dir === 'ar') { mode = 'mc'; it.opts = ['der', 'die', 'das']; }
     else mode = 'type';
   } else if (mode === 'mc') { it.opts = it.opts || mcOptions(it); if (it.opts.length < 4) mode = 'flip'; }
   it.modeUsed = mode;
   const n = SES.queue.length;
-  const meta = de ? `${L.flag || ''} ${DE_NAMES[it.dir]}` : `${L.flag || ''} ${fd ? esc(L.name) + ' → Deutsch' : 'Deutsch → ' + esc(L.name)}`;
+  const meta = ma ? `${MATH.flag} ${esc(c.unit)}` : de ? `${L.flag || ''} ${DE_NAMES[it.dir]}` : wi ? `${L.flag} ${fd ? 'Frage → Antwort' : 'Antwort → Frage'}`
+    : vf ? `${L.flag || ''} Unregelmäßige Verben` : `${L.flag || ''} ${fd ? esc(L.name) + ' → Deutsch' : 'Deutsch → ' + esc(L.name)}`;
   const ask = it.dir === 'wa' ? 'Welche Wortart ist das?' : it.dir === 'ar' ? 'Welcher Artikel passt?' : '';
   const canSpeech = 'speechSynthesis' in window;
   $('#v-session').innerHTML = `
@@ -928,25 +1080,32 @@ function renderQ() {
   </div>
   ${SES.combo >= 3 ? `<div class="combo">🔥 ${SES.combo}er-Serie!</div>` : ''}
   <div class="qcard ${it.retry ? 'retry' : ''}">
-    <div class="qmeta">${meta} · ${esc(c.unit)}${it.retry ? ' · nochmal' : ''}${SES.practice ? ' · Übung' : ''}</div>
+    <div class="qmeta">${meta}${ma ? '' : ' · ' + esc(c.unit)}${it.retry ? ' · nochmal' : ''}${SES.practice ? ' · Übung' : ''}</div>
     ${dk ? `<div class="prompt" style="font-size:20px">Hör gut zu und schreib das Wort auf.</div>
       <div class="row" style="justify-content:center">
         ${canSpeech ? `<button class="btn primary" data-act="dk-play">🔊 Anhören</button><button class="btn" data-act="dk-play" data-slow="1">🐢 Langsam</button>`
                     : `<button class="btn" data-act="dk-show">👀 Wort kurz zeigen</button>`}
       </div>
       <div id="dkword" class="prompt" hidden style="margin-top:10px">${esc(wordLabel(c))}</div>`
-       : `${ask ? `<div class="small muted" style="margin-bottom:6px">${ask}</div>` : ''}<div class="prompt">${esc(promptOf(it))}</div>`}
+       : `${ask ? `<div class="small muted" style="margin-bottom:6px">${ask}</div>` : ''}<div class="prompt"${ma ? ' style="font-size:40px"' : ''}>${esc(promptOf(it))}${ma ? ' = ?' : ''}</div>`}
     ${!dk && (fd || de) && L.speech ? `<button class="icon speak" data-act="speak" data-t="${esc(c.term)}" data-l="${c.lang}" aria-label="Vorlesen">🔊</button>` : ''}
   </div>
   <div id="ans"></div>
   <div id="fb"></div>`;
   const ans = $('#ans');
-  if (mode === 'type') {
+  if (mode === 'verb') {
+    ans.innerHTML = `
+    <form id="tf3" class="typeform" autocomplete="off">
+      ${['Infinitive', 'Simple past', 'Past participle'].map((l, i) => `<div class="f"><label>${l}</label><input id="tv${i}" type="text" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="${i < 2 ? 'next' : 'done'}"></div>`).join('')}
+      <div class="row" id="trow"><button type="button" class="btn ghost" data-act="dunno3">Weiß ich nicht</button><button class="btn primary grow" type="submit">Prüfen</button></div>
+    </form>`;
+    setTimeout(() => { const i = $('#tv0'); if (i) i.focus(); }, 60);
+  } else if (mode === 'type') {
     const acc = dk ? ['ä', 'ö', 'ü', 'ß', 'Ä', 'Ö', 'Ü'] : !fd && c.lang === 'fr' ? ['é', 'è', 'ê', 'à', 'â', 'ç', 'ô', 'î', 'û', 'ù', 'ë', 'ï', 'œ'] : [];
-    const ph = dk ? 'Wort schreiben …' : fd ? 'Auf Deutsch …' : 'Auf ' + esc(L.name) + ' …';
+    const ph = ma ? 'Ergebnis' : dk ? 'Wort schreiben …' : wi ? (fd ? 'Antwort …' : 'Frage / Begriff …') : fd ? 'Auf Deutsch …' : 'Auf ' + esc(L.name) + ' …';
     ans.innerHTML = `
     <form id="tf" class="typeform" autocomplete="off">
-      <input id="ti" type="text" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="done" placeholder="${ph}">
+      <input id="ti" type="text" ${ma ? 'inputmode="numeric" pattern="[0-9]*"' : ''} autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="done" placeholder="${ph}">
       ${acc.length ? `<div class="accbar">${acc.map(a => `<button type="button" data-act="acc" data-c="${a}">${a}</button>`).join('')}</div>` : ''}
       <div class="row" id="trow"><button type="button" class="btn ghost" data-act="dunno">Weiß ich nicht</button><button class="btn primary grow" type="submit">Prüfen</button></div>
     </form>`;
@@ -964,7 +1123,8 @@ function applyAnswer(ok) {
   it.answered = true; it.ok = ok; it.prevCombo = SES.combo;
   SES.combo = ok ? SES.combo + 1 : 0;
   if (!it.retry) {
-    if (!SES.practice) {
+    if (it.dir === 'mm') gradeMath(d, it.card.mkey, ok);
+    else if (!SES.practice) {
       const k = pkey(it.card.id, it.dir);
       it.before = d.progress[k] ? Object.assign({}, d.progress[k]) : null;
       it.wasDirty = d.dirty.has(k);
@@ -1001,11 +1161,29 @@ function answerType(dunno) {
   const it = cur(); if (it.answered) return;
   const inp = $('#ti'); const val = dunno ? '' : inp.value;
   if (!dunno && !val.trim()) { inp.focus(); return; }
-  const r = dunno ? { ok: false } : it.dir === 'dk' ? dkCheck(val, it.card) : check(val, answerOf(it));
+  const r = dunno ? { ok: false } : it.dir === 'dk' ? dkCheck(val, it.card) : it.dir === 'mm' ? mmCheck(val, it.card) : check(val, answerOf(it));
   applyAnswer(r.ok);
   inp.disabled = true; inp.blur(); $('#trow').hidden = true;
   const ab = $('.accbar'); if (ab) ab.hidden = true;
   renderFeedback({ given: dunno ? null : val, hint: r.hint, near: r.near });
+}
+function mmCheck(val, c) {
+  const u = String(val).replace(/[\s.]/g, ''), want = String(c.translation);
+  if (u === want) return { ok: true };
+  if (/^\d+$/.test(u) && Math.abs(+u - +want) <= 10 && /[+−]/.test(c.term)) return { ok: false, near: true, hint: 'Knapp! Rechne nochmal Schritt für Schritt.' };
+  return { ok: false };
+}
+function answerVerb(dunno) {
+  const it = cur(); if (it.answered) return;
+  const want = verbForms(it.card), vals = [0, 1, 2].map(i => $('#tv' + i).value);
+  if (!dunno && vals.every(v => !v.trim())) { $('#tv0').focus(); return; }
+  const res = vals.map((v, i) => !dunno && check(v, want[i]).ok);
+  const ok = res.every(Boolean);
+  applyAnswer(ok);
+  [0, 1, 2].forEach(i => { const e = $('#tv' + i); e.disabled = true; e.style.borderColor = res[i] ? 'var(--ok)' : 'var(--bad)'; });
+  $('#trow').hidden = true;
+  const wrong = ['Infinitive', 'Simple past', 'Past participle'].filter((_, i) => !res[i]);
+  renderFeedback({ given: dunno ? null : vals.join(' – '), hint: !ok && !dunno && wrong.length < 3 ? 'Noch nicht richtig: ' + wrong.join(', ') : undefined });
 }
 function answerMC(i) {
   const it = cur(); if (it.answered) return;
@@ -1031,7 +1209,7 @@ function renderFeedback(info) {
   if (info.given !== undefined) it.fbInfo = info; else info = Object.assign({}, it.fbInfo || {}, info);
   const head = it.ok ? (info.overridden ? 'Okay, zählt als richtig ✅' : pick(['Richtig! ✅', 'Stark! 💪', 'Genau! 🎯', 'Top! ⭐', 'Sauber! 🚀']))
     : (info.near ? 'Knapp daneben 🤏' : 'Leider falsch ❌');
-  const showSol = it.modeUsed === 'type';
+  const showSol = it.modeUsed === 'type' || it.modeUsed === 'verb';
   $('#fb').innerHTML = `
   <div class="fb ${it.ok ? 'ok' : 'bad'}">
     <div class="fbhead">${head}${it.gain ? `<span class="xp">+${it.gain} XP</span>` : ''}</div>
@@ -1043,7 +1221,7 @@ function renderFeedback(info) {
     ${info.hint ? `<div class="hint">💡 ${esc(info.hint)}</div>` : ''}
     ${c.note ? `<div class="note">${esc(c.note)}</div>` : ''}
     <div class="row">
-      ${!it.ok && it.modeUsed === 'type' && it.dir !== 'dk' && info.given ? `<button class="btn ghost" data-act="override">Ich hatte recht</button>` : ''}
+      ${!it.ok && (it.modeUsed === 'type' || it.modeUsed === 'verb') && it.dir !== 'dk' && it.dir !== 'mm' && info.given ? `<button class="btn ghost" data-act="override">Ich hatte recht</button>` : ''}
       <button class="btn primary grow" data-act="next">Weiter →</button>
     </div>
   </div>`;
@@ -1097,6 +1275,7 @@ function renderStats() {
   if (!d) { $('#v-stats').innerHTML = `<header class="top"><h1>Statistik</h1>${syncBadge()}</header><div class="card empty"><p class="muted">Noch kein Lernprofil vorhanden.</p></div>`; return; }
   const st = d.state, lv = levelInfo(st.xp || 0), me = learner(d.lid);
   let c = 0, w = 0; Object.values(d.progress).forEach(p => { c += p.correct || 0; w += p.wrong || 0; });
+  Object.values(st.math || {}).forEach(p => { c += p.ok || 0; w += p.wr || 0; });
   let html = `<header class="top"><div><div class="muted small">Statistik</div><h1>${esc(me ? me.name : '')}</h1></div>${syncBadge()}</header>
   ${learnerChips('slearner', d.lid)}
   <div class="kpis">
@@ -1121,13 +1300,25 @@ function renderStats() {
     const hard = cards.map(v => ({ v, wr: dirsFor(v).reduce((s, dr) => s + ((prog(d, v.id, dr) || {}).wrong || 0), 0) }))
       .filter(x => x.wr > 0).sort((a, b) => b.wr - a.wr).slice(0, 5);
     html += `<div class="card">
-      <h3>${L.flag} ${esc(L.name)} <span class="muted small">· ${cards.length} ${isDeLang(lang) ? 'Wörter' : 'Vokabeln'}</span></h3>
+      <h3>${L.flag} ${esc(L.name)} <span class="muted small">· ${cards.length} ${isDeLang(lang) ? 'Wörter' : isWi(lang) ? 'Karten' : 'Vokabeln'}</span></h3>
       <div class="stack">${box.map((n, i) => n ? `<i style="width:${n / items * 100}%;background:${BOXC[i]}"></i>` : '').join('')}</div>
       <div class="legend">${box.map((n, i) => `<span style="--c:${BOXC[i]}">${BOXL[i]} ${n}</span>`).join('')}</div>
       <div class="label" style="margin-top:14px">Units</div>
       ${units.map(([u, p]) => `<div class="urow"><span class="n">${esc(u)}</span><div class="bar ${p >= 100 ? 'done' : ''}"><i style="width:${p}%"></i></div><span class="p">${p} %</span></div>`).join('')}
       ${hard.length ? `<div class="label" style="margin-top:14px">Knifflige Wörter</div>
         ${hard.map(x => `<div class="wl"><span><b>${esc(wordLabel(x.v))}</b> – ${esc(transLabel(x.v))}</span><span>${x.wr}× falsch</span></div>`).join('')}` : ''}
+    </div>`;
+  }
+  const M = st.math || {};
+  if (Object.keys(M).length) {
+    any = true;
+    const rows = [2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => [r, mathRowStats(d, r)]).filter(([, s]) => s.done);
+    const pm = ['k+', 'k-'].map(k => M[k]).filter(Boolean), pmOk = pm.reduce((s, p) => s + p.ok, 0), pmAll = pm.reduce((s, p) => s + p.ok + p.wr, 0);
+    const hard = Object.entries(M).filter(([k, p]) => /^[md]/.test(k) && p.wr > 0).sort((a, b) => b[1].wr - a[1].wr).slice(0, 5);
+    html += `<div class="card"><h3>${MATH.flag} Mathe</h3>
+      ${rows.length ? `<div class="label" style="margin-top:6px">Einmaleins</div>${rows.map(([r, s]) => `<div class="urow"><span class="n">${r}er-Reihe</span><div class="bar ${s.pct >= 100 ? 'done' : ''}"><i style="width:${s.pct}%"></i></div><span class="p">${s.pct} %</span></div>`).join('')}` : ''}
+      ${pmAll ? `<div class="label" style="margin-top:14px">Plus / Minus</div><div class="small">${pmOk} von ${pmAll} richtig (${pct(pmOk, pmAll)} %)</div>` : ''}
+      ${hard.length ? `<div class="label" style="margin-top:14px">Knifflige Aufgaben</div>${hard.map(([k, p]) => { const f = mathFact(k); return `<div class="wl"><span><b>${esc(f.op === 'mul' ? `${k.match(/x(\d+)/)[1]} · ${f.row}` : f.q)}</b> = ${f.a}</span><span>${p.wr}× falsch</span></div>`; }).join('')}` : ''}
     </div>`;
   }
   if (!any) html += `<div class="card empty"><div class="e">📊</div><p class="muted">Sobald Vokabeln da sind und gelernt wird, erscheint hier der Fortschritt.</p></div>`;
@@ -1226,13 +1417,22 @@ function renderImport() {
     <div class="f" id="inewwrap" ${IMP.unit === '__new' ? '' : 'hidden'}><input id="inewunit" class="field" placeholder="z. B. Unit 4 oder Lektion 12" value="${esc(IMP.newUnit)}"></div>
     ${isDeLang(IMP.lang) ? `<div class="f"><label>Wörter – eines pro Zeile</label>
       <textarea id="itext" class="field" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="der Hund ; Nomen ; ; Mehrzahl: die Hunde&#10;springen ; Verb ; ; ich springe, er sprang&#10;schnell ; Adjektiv&#10;Fahrrad">${esc(IMP.text)}</textarea></div>`
+    : isWi(IMP.lang) ? `<div class="f"><label>Karten – eine pro Zeile</label>
+      <textarea id="itext" class="field" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Hauptstadt von Baden-Württemberg ; Stuttgart&#10;Wie viele Beine hat eine Spinne? ; 8, acht&#10;Wann begann der Dreißigjährige Krieg? ; 1618">${esc(IMP.text)}</textarea></div>
+    <label class="check"><input type="checkbox" id="iswap" ${IMP.swap ? 'checked' : ''}> Antwort steht links (Spalten tauschen)</label>`
     : `<div class="f"><label>Vokabeln – eine pro Zeile</label>
       <textarea id="itext" class="field" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="apple ; Apfel&#10;to look after ; sich kümmern um&#10;puella ; Mädchen ; -ae f.">${esc(IMP.text)}</textarea></div>
     <label class="check"><input type="checkbox" id="iswap" ${IMP.swap ? 'checked' : ''}> Deutsch steht links (Spalten tauschen)</label>`}
     <div id="iprev" class="prev"></div>
     <button class="btn primary wide" data-act="imp-add">Hinzufügen für ${esc((learner(d.lid) || {}).name || '')}</button>
   </div>
-  ${isDeLang(IMP.lang) ? `<div class="card small muted">
+  ${IMP.lang === 'en' ? `<div class="card"><h3>📚 Unregelmäßige Verben</h3>
+    <p class="small muted" style="margin-top:0">${IRREGULAR.length} gängige Verben (Klasse 5–8) mit allen drei Formen, z. B. go – went – gone. Kommen in die Unit „Irregular verbs“. Bei „DE → EN“ werden alle drei Formen abgefragt.</p>
+    <button class="btn wide" data-act="imp-irregular">Für ${esc((learner(d.lid) || {}).name || '')} einfügen</button></div>` : ''}
+  ${isWi(IMP.lang) ? `<div class="card small muted">
+    💡 <b>Format Wissen:</b> Frage ; Antwort ; Notiz (optional). Mehrere richtige Antworten mit Komma trennen, z. B. „8, acht“. Für Fächer wie Sachunterricht, Geschichte, Bio oder Erdkunde – am besten je Thema eine Unit.<br><br>
+    📷 Heftseite oder Merkblatt fotografieren und an Claude schicken – die fertigen Karten kommen zurück.
+  </div>` : isDeLang(IMP.lang) ? `<div class="card small muted">
     💡 <b>Format Deutsch:</b> Wort ; Wortart ; Artikel ; Notiz. Nur das Wort ist Pflicht – reine Lernwörter-Listen für das Diktat gehen also auch.<br><br>
     Nomen dürfen mit Artikel davor stehen („der Hund“). Wortarten: Nomen, Verb, Adjektiv (auch Namenwort, Tunwort, Wiewort). Großgeschriebene Wörter ohne Wortart werden als Nomen erkannt.<br><br>
     📷 Lernwörter-Liste fotografieren und das Foto an Claude schicken – die fertige Liste kommt zurück.
@@ -1327,8 +1527,8 @@ function openEdit(id) {
   }
   openModal(`
   <h2>Vokabel bearbeiten</h2>
-  <div class="f"><label>${esc((LANGS[v.lang] || {}).name || v.lang)}</label><input id="eterm" class="field" value="${esc(v.term)}" autocapitalize="off" autocorrect="off"></div>
-  <div class="f"><label>Deutsch</label><input id="etrans" class="field" value="${esc(v.translation)}" autocapitalize="off" autocorrect="off"></div>
+  <div class="f"><label>${isWi(v.lang) ? 'Frage' : esc((LANGS[v.lang] || {}).name || v.lang)}</label><input id="eterm" class="field" value="${esc(v.term)}" autocapitalize="off" autocorrect="off"></div>
+  <div class="f"><label>${isWi(v.lang) ? 'Antwort' : 'Deutsch'}</label><input id="etrans" class="field" value="${esc(v.translation)}" autocapitalize="off" autocorrect="off"></div>
   <div class="f"><label>Notiz (optional)</label><input id="enote" class="field" value="${esc(v.note || '')}" autocapitalize="off"></div>
   <div class="f"><label>Unit</label><input id="eunit" class="field" value="${esc(v.unit)}"></div>
   <div class="row"><button class="btn danger" data-act="edit-del" data-id="${v.id}">🗑️</button><button class="btn ghost grow" data-act="modal-close">Abbrechen</button><button class="btn primary grow" data-act="edit-save" data-id="${v.id}">Speichern</button></div>`);
@@ -1401,12 +1601,21 @@ function renderSettings() {
     <div class="f"><label>Wer lernt auf diesem Gerät?</label><select id="sdev" class="field">${devSel.map(([v, l]) => `<option value="${v}" ${v === S.prefs.learner ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
     <label class="check"><input type="checkbox" id="sauto" ${S.prefs.autoSpeak ? 'checked' : ''}> Vokabeln automatisch vorlesen</label>
   </div>
-  ${d ? `<div class="card">
-    <h3>Tagesziel für ${esc((learner(d.lid) || {}).name || '')}</h3>
+  ${d ? (() => { const nm = esc((learner(d.lid) || {}).name || ''), rw = rewardInfo(d.state); return `<div class="card">
+    <h3>Profil von ${nm}</h3>
     ${learnerChips('plearner', d.lid)}
-    <div class="row" style="margin-top:0"><select id="sgoal" class="field grow">${[10, 15, 20, 30, 40, 50].map(n => `<option ${n === (d.state.goal || 20) ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" data-act="goal-save">Speichern</button></div>
-    <p class="small muted">Karten pro Tag</p>
-  </div>` : ''}
+    <div class="f"><label>Tagesziel (Karten pro Tag)</label>
+      <div class="row" style="margin-top:0"><select id="sgoal" class="field grow">${[10, 15, 20, 30, 40, 50].map(n => `<option ${n === (d.state.goal || 20) ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" data-act="goal-save">Speichern</button></div></div>
+    <label class="check"><input type="checkbox" id="smath" ${d.state.showMath !== false ? 'checked' : ''}> 🧮 Mathe-Trainer anzeigen (Einmaleins, Plus/Minus)</label>
+  </div>
+  <div class="card">
+    <h3>🎁 Belohnungsziel für ${nm}</h3>
+    ${rw ? `<div class="small" style="margin-bottom:8px"><b>${esc(rw.title)}</b>: ${rw.got} / ${rw.target} XP ${rw.done ? '– 🎉 erreicht!' : ''}</div>
+      <div class="bar ${rw.done ? 'done' : ''}" style="height:10px;margin-bottom:12px"><i style="width:${pct(rw.got, rw.target)}%"></i></div>` : `<p class="small muted" style="margin-top:0">Ein Ziel motiviert: Die gesammelten Punkte ab jetzt zählen dafür, der Fortschritt steht auf der Startseite.</p>`}
+    <div class="f"><label>${rw ? 'Neues Ziel' : 'Belohnung'}</label><input id="rwtitle" class="field" placeholder="z. B. Kinoabend, Eis essen, 30 Min. Extra-Spielzeit" maxlength="40"></div>
+    <div class="f"><label>Benötigte Punkte (XP)</label><select id="rwtarget" class="field">${[250, 500, 1000, 2000, 3000, 5000].map(n => `<option value="${n}" ${n === 1000 ? 'selected' : ''}>${n} XP${n === 250 ? ' (ca. 2–3 Tage)' : n === 1000 ? ' (ca. 1–2 Wochen)' : n === 5000 ? ' (ca. 2 Monate)' : ''}</option>`).join('')}</select></div>
+    <div class="row"><button class="btn primary grow" data-act="rw-save">${rw ? 'Neues Ziel starten' : 'Ziel starten'}</button>${rw ? `<button class="btn ghost" data-act="rw-del">Entfernen</button>` : ''}</div>
+  </div>`; })() : ''}
   <div class="card">
     <h3>Synchronisation</h3>
     <p class="small muted" style="margin-top:0">${CLOUD
@@ -1492,6 +1701,22 @@ const ACT = {
   mode: el => { S.prefs.mode = el.dataset.v; savePrefs(); renderHome(); },
   start: () => startSession(),
   'start-test': () => startSession('test'),
+  'start-math': () => startMath(),
+  maop: el => { S.prefs.maOp = el.dataset.v; savePrefs(); renderHome(); },
+  marow: el => { S.prefs.maRow = el.dataset.v; savePrefs(); renderHome(); },
+  widir: el => { S.prefs.wiDir = el.dataset.v; savePrefs(); renderHome(); },
+  dunno3: () => answerVerb(true),
+  'rw-save': () => {
+    const d = PD(); if (!d) return;
+    const title = $('#rwtitle').value.trim(), target = parseInt($('#rwtarget').value, 10) || 1000;
+    if (!title) return toast('Bitte eine Belohnung eintragen', true);
+    d.state.reward = { title, target, base: d.state.xp || 0, at: nowIso() }; d.state.settingsAt = nowIso();
+    touchState(d); saveData(d); sync(); toast('Belohnungsziel gestartet'); renderParent();
+  },
+  'rw-del': () => {
+    const d = PD(); if (!d || !confirm('Belohnungsziel entfernen?')) return;
+    d.state.reward = null; d.state.settingsAt = nowIso(); touchState(d); saveData(d); sync(); renderParent();
+  },
   'retry-wrong': () => { const w = SES.summary.wrong; SES.d = AD(); startSession(w); },
   speak: el => speak(el.dataset.t, el.dataset.l),
   quit: () => { if (confirm('Runde beenden? Alles bis hier ist gespeichert.')) finish(); },
@@ -1538,6 +1763,18 @@ const ACT = {
   },
   'pw-change': () => openPwChange(),
   'imp-add': () => doImport(),
+  'imp-irregular': async el => {
+    const d = PD(); if (!d) return;
+    const unit = 'Irregular verbs';
+    const have = new Set(d.vocab.filter(v => v.lang === 'en').map(v => norm(v.term)));
+    const base = Date.now();
+    const list = IRREGULAR.map(([a, b, c, de]) => ({ term: `${a} – ${b} – ${c}`, translation: de }))
+      .filter(v => !have.has(norm(v.term)))
+      .map((v, i) => ({ id: uuid(), lang: 'en', unit, term: v.term, translation: v.translation, note: null, created_at: new Date(base + i).toISOString() }));
+    el.disabled = true;
+    try { await vocabInsert(d, list); toast(list.length ? `${list.length} Verben in „${unit}“ eingefügt` : 'Schon alle vorhanden'); IMP.unit = unit; renderImport(); }
+    catch (e) { toast('Fehler: ' + e.message, true); el.disabled = false; }
+  },
   edit: el => openEdit(el.dataset.id),
   'edit-save': el => saveEdit(el.dataset.id),
   'edit-del': el => delVocab(el.dataset.id),
@@ -1613,6 +1850,7 @@ document.addEventListener('submit', e => {
   else if (id === 'nlf') addLearnerFromPick();
   else if (id === 'nlf2') addLearnerFromSettings();
   else if (id === 'pwf') doPwChange();
+  else if (id === 'tf3') answerVerb(false);
 });
 document.addEventListener('input', e => {
   const id = e.target.id;
@@ -1629,9 +1867,11 @@ document.addEventListener('change', e => {
   else if (id === 'lunit') { LST.unit = v; renderList(); }
   else if (id === 'sdev') { S.prefs.learner = v; savePrefs(); toast('Gerät zugeordnet'); sync(); }
   else if (id === 'sauto') { S.prefs.autoSpeak = e.target.checked; savePrefs(); }
+  else if (id === 'smath') { const d = PD(); if (d) { d.state.showMath = e.target.checked; d.state.settingsAt = nowIso(); touchState(d); saveData(d); sync(); toast('Gespeichert'); } }
   else if (id === 'bfile') { const f = e.target.files[0]; e.target.value = ''; if (f) importBackup(f); }
 });
 document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && /^tv[01]$/.test((document.activeElement || {}).id || '')) { e.preventDefault(); $('#tv' + (+document.activeElement.id.slice(2) + 1)).focus(); return; }
   if (e.key !== 'Enter' || VIEW !== 'session' || !SES) return;
   const a = document.activeElement;
   if (a && (a.tagName === 'INPUT' || a.tagName === 'BUTTON')) return;
