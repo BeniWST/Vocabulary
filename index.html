@@ -108,6 +108,18 @@ textarea.field{min-height:180px;font-size:16px;resize:vertical;line-height:1.5}
 .vrow{display:flex;width:100%;gap:10px;align-items:center;text-align:left;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text);padding:11px 2px;font:inherit;font-size:15px}
 .vrow b{flex:1;font-weight:600;word-break:break-word} .vrow span{flex:1;color:var(--muted);word-break:break-word}
 .boxes{font-size:11px;color:var(--muted);white-space:nowrap}
+.wk{display:flex;gap:6px;align-items:flex-end;margin-top:8px}
+.wkd{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+.wkd b{font-size:11px;color:var(--text);min-height:14px}
+.wkb{width:100%;height:64px;background:var(--surface2);border-radius:8px;display:flex;align-items:flex-end;overflow:hidden}
+.wkb i{display:block;width:100%;background:linear-gradient(180deg,var(--accent2),var(--accent));border-radius:8px}
+.wkd.today span{color:var(--accent);font-weight:700}
+.family{border-left-color:#0ea5e9}
+details.fx summary{list-style:none;cursor:pointer;display:grid;gap:4px} details.fx summary::-webkit-details-marker{display:none}
+.fxt{font-weight:700;font-size:16px} .fxb{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.fxx{display:block;font:600 15px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--surface2);border-radius:10px;padding:8px 10px;white-space:normal}
+.fxv{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px} .fxv td{padding:5px 4px;border-bottom:1px solid var(--border);vertical-align:top} .fxv td:first-child{font-weight:700;white-space:nowrap;width:30%}
+.psub{font-size:14px;color:var(--muted);margin-top:6px}
 .reward{border-left:5px solid #f59e0b} .reward.done{border-left-color:var(--ok);background:var(--okbg)}
 body[data-lang="ma"]{--lang:#10b981} body[data-lang="wi"]{--lang:#0ea5e9} body[data-lang="de"]{--lang:#111827}
 .srow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
@@ -137,10 +149,12 @@ body[data-lang="ma"]{--lang:#10b981} body[data-lang="wi"]{--lang:#0ea5e9} body[d
   <section id="v-done" class="view" hidden></section>
   <section id="v-stats" class="view" hidden></section>
   <section id="v-parent" class="view" hidden></section>
+  <section id="v-formeln" class="view" hidden></section>
 </div>
 <nav id="tabbar">
   <button data-act="go" data-v="home"><span class="ti">📚</span>Lernen</button>
   <button data-act="go" data-v="stats"><span class="ti">📊</span>Statistik</button>
+  <button data-act="go" data-v="formeln"><span class="ti">📐</span>Formeln</button>
   <button data-act="go" data-v="parent"><span class="ti">🔒</span>Eltern</button>
 </nav>
 <div id="modal" hidden><div class="sheet" id="sheet"></div></div>
@@ -161,7 +175,7 @@ if (!LANGS.de) LANGS.de = { name: 'Deutsch', flag: '🇩🇪', speech: 'de-DE' }
 if (!LANGS.wi) LANGS.wi = { name: 'Wissen', flag: '💡', speech: null };          // Frage-Antwort-Karten (Sachunterricht, Geschichte, Bio …)
 const MATH = { name: 'Mathe', flag: '🧮' };                                          // Mathe-Trainer: Aufgaben werden erzeugt, nicht importiert
 const CLOUD = !!(C.supabaseUrl && C.supabaseKey);
-const VERSION = '1.5';
+const VERSION = '1.6';
 const PARENT = '__parent';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -208,7 +222,8 @@ const learner = id => S.learners.find(l => l.id === id);
 const sortLearners = () => S.learners.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
 
 /* ---------- Daten je Lernprofil ---------- */
-const DEFAULT_STATE = { goal: 20, settingsAt: null, xp: 0, streak: 0, lastDay: null, today: { day: null, count: 0 }, showMath: true, reward: null, math: {}, updated_at: null };
+const DEFAULT_STATE = { goal: 20, settingsAt: null, xp: 0, streak: 0, lastDay: null, today: { day: null, count: 0 }, showMath: true, mathLevel: null, reward: null, math: {}, ext: {}, log: {}, family: null, updated_at: null };
+const freshState = (...src) => Object.assign({}, DEFAULT_STATE, { today: { day: null, count: 0 }, math: {}, ext: {}, log: {} }, ...src);   // eigene Objekte je Kind
 const DB = {};
 function data(lid) {
   if (!lid || lid === PARENT) return null;
@@ -216,7 +231,7 @@ function data(lid) {
     lid,
     vocab: LS.get('vocab_' + lid, []),
     progress: LS.get('progress_' + lid, {}),
-    state: Object.assign({}, DEFAULT_STATE, LS.get('state_' + lid, {})),
+    state: freshState(LS.get('state_' + lid, {})),
     dirty: new Set(LS.get('dirty_' + lid, [])),
     stateDirty: LS.get('stateDirty_' + lid, false),
     everSynced: LS.get('ever_' + lid, false)
@@ -253,7 +268,7 @@ function levelInfo(xp) {
 }
 function mergeState(a, b) {
   a = a || {}; b = b || {};
-  const m = Object.assign({}, DEFAULT_STATE, b, a);
+  const m = freshState(b, a);
   m.xp = Math.max(a.xp || 0, b.xp || 0);
   const la = a.lastDay || '', lb = b.lastDay || '';
   const s = la > lb ? a : lb > la ? b : ((a.streak || 0) >= (b.streak || 0) ? a : b);
@@ -262,7 +277,15 @@ function mergeState(a, b) {
   m.today = ta.day === tb.day ? { day: ta.day || null, count: Math.max(ta.count || 0, tb.count || 0) } : ((ta.day || '') > (tb.day || '') ? ta : tb);
   const sa = ts(a.settingsAt) >= ts(b.settingsAt) ? a : b;
   m.goal = sa.goal || 20; m.settingsAt = sa.settingsAt || null;
-  m.showMath = sa.showMath !== false; m.reward = sa.reward || null;
+  m.showMath = sa.showMath !== false; m.reward = sa.reward || null; m.mathLevel = sa.mathLevel || null;
+  const ea = a.ext || {}, eb = b.ext || {};
+  m.ext = Object.assign({}, eb);
+  for (const k of Object.keys(ea)) if (!eb[k] || ts(ea[k].updated_at) >= ts(eb[k].updated_at)) m.ext[k] = ea[k];
+  const la2 = a.log || {}, lb2 = b.log || {};
+  m.log = {};
+  for (const k of new Set(Object.keys(la2).concat(Object.keys(lb2)))) { const x = la2[k] || {}, y = lb2[k] || {}; m.log[k] = { n: Math.max(x.n || 0, y.n || 0), ok: Math.max(x.ok || 0, y.ok || 0), xp: Math.max(x.xp || 0, y.xp || 0) }; }
+  const fa = a.family, fb = b.family;
+  m.family = !fa ? (fb || null) : !fb ? fa : (ts(fa.at) >= ts(fb.at) ? fa : fb);
   const ma = a.math || {}, mb = b.math || {};
   m.math = Object.assign({}, mb);
   for (const k of Object.keys(ma)) if (!mb[k] || ts(ma[k].t) >= ts(mb[k].t)) m.math[k] = ma[k];
@@ -275,11 +298,43 @@ function mergeState(a, b) {
    ============================================================ */
 const INTERVAL = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 };   // Tage bis zur nächsten Abfrage je Fach
 const pkey = (id, dir) => id + '|' + dir;
-const prog = (d, id, dir) => d.progress[pkey(id, dir)];
+const EXT_DIRS = new Set(['ho', 'pl', 'zf', 'st']);   // Lernstand dieser Übungen liegt in state.ext (kein SQL nötig)
+const isExt = dir => EXT_DIRS.has(dir);
+const prog = (d, id, dir) => isExt(dir) ? (d.state.ext || {})[pkey(id, dir)] : d.progress[pkey(id, dir)];
+function setProg(d, id, dir, p) {
+  const k = pkey(id, dir);
+  if (isExt(dir)) { const e = d.state.ext || (d.state.ext = {}); if (p) e[k] = p; else delete e[k]; }
+  else { if (p) d.progress[k] = p; else delete d.progress[k]; d.dirty.add(k); }
+}
 /* Deutsch: term = Wort (ohne Artikel), translation = "Wortart|Artikel", note = Notiz
    Übungen (= eigene Lernkartei-Fächer): wa = Wortart, ar = Artikel, dk = Diktat */
 const DE_DIRS = ['wa', 'ar', 'dk'];
-const DE_NAMES = { wa: 'Wortart', ar: 'Artikel', dk: 'Diktat' };
+const DE_NAMES = { wa: 'Wortart', ar: 'Artikel', dk: 'Diktat', pl: 'Mehrzahl', zf: 'Vergangenheit', st: 'Steigerung' };
+/* Formen aus der Notiz: „Mehrzahl: die Hunde“ · „ich laufe, er lief“ bzw. „Vergangenheit: er lief“ · „größer, am größten“ */
+function deForms(c) {
+  const n = String((c && c.note) || ''), i = deInfo(c), out = {};
+  let m = n.match(/Mehrzahl:\s*(?:die\s+)?([^;,]+)/i);
+  if (m && i.wa === 'Nomen') out.pl = m[1].trim();
+  m = n.match(/(?:Vergangenheit|Präteritum):\s*(?:(?:er|sie|es)\s+)?([^;,]+)/i);
+  if (m) out.zf = m[1].trim();
+  else if (i.wa === 'Verb' && /\bich\s/.test(n)) {
+    const parts = n.split(/[,;]/).map(x => x.trim()), last = parts[parts.length - 1], mm = last.match(/^(?:er|sie|es)\s+(\S+)$/);
+    if (mm && parts.length >= 2) out.zf = mm[1];
+  }
+  m = n.match(/(?:Steigerung:\s*)?([^\s,;:]+),\s*am\s+([^\s,;]+)/i);
+  if (m && i.wa === 'Adjektiv') out.st = [m[1], m[2]];
+  return out;
+}
+function strictCheck(val, want, pre = []) {
+  let u = String(val || '').trim().replace(/\s+/g, ' ').replace(/[’`´]/g, "'");
+  const t = String(want).trim();
+  for (const p of pre) if (u.toLowerCase().startsWith(p + ' ')) { u = u.slice(p.length + 1).trim(); break; }
+  if (!u) return { ok: false };
+  if (u === t) return { ok: true };
+  if (u.toLowerCase() === t.toLowerCase()) return { ok: false, near: true, hint: t.charAt(0) !== t.charAt(0).toLowerCase() ? 'Achte auf die Großschreibung.' : 'Dieses Wort schreibt man klein.' };
+  if (t.length >= 4 && lev(u.toLowerCase(), t.toLowerCase()) <= 1) return { ok: false, near: true, hint: 'Fast! Nur ein Buchstabe stimmt nicht.' };
+  return { ok: false };
+}
 const WA_MAIN = ['Nomen', 'Verb', 'Adjektiv'];
 const WA_ALL = ['Nomen', 'Verb', 'Adjektiv', 'Pronomen', 'Präposition', 'Konjunktion', 'Adverb', 'Artikel', 'Zahlwort'];
 const WA_ALIAS = {
@@ -312,11 +367,26 @@ function dirsFor(c) {
   if (i.wa) out.push('wa');
   if (i.art) out.push('ar');
   out.push('dk');
+  const f = deForms(c);
+  if (f.pl) out.push('pl');
+  if (f.zf) out.push('zf');
+  if (f.st) out.push('st');
   return out;
 }
-function eligibleDirs(c, dir) { const all = dirsFor(c); return dir === 'mix' ? all : all.filter(x => x === dir); }
+function eligibleDirs(c, dir) {
+  if (dir === 'ho') return (LANGS[c.lang] || {}).speech && !isDeLang(c.lang) ? ['ho'] : [];
+  const all = dirsFor(c); return dir === 'mix' ? all : all.filter(x => x === dir);
+}
+const statDirs = (d, c) => prog(d, c.id, 'ho') ? dirsFor(c).concat(['ho']) : dirsFor(c);
 const isWi = lang => lang === 'wi';
-const curDir = lang => isDeLang(lang) ? (S.prefs.deDir || 'wa') : isWi(lang) ? (S.prefs.wiDir || 'fd') : S.prefs.dir;
+const curDir = lang => {
+  if (isDeLang(lang)) return S.prefs.deDir || 'wa';
+  if (isWi(lang)) return S.prefs.wiDir || 'fd';
+  const d0 = S.prefs.dir || 'mix';
+  if (d0 === 'lf' && lang !== 'la') return 'mix';
+  if (d0 === 'ho' && !(LANGS[lang] || {}).speech) return 'mix';
+  return d0;
+};
 
 /* Unregelmäßige Verben: term = "go – went – gone" → Abfrage aller drei Formen */
 function verbForms(c) {
@@ -377,6 +447,8 @@ function mathWeight(p, t) {
   return ({ 1: 5, 2: 2, 3: 1, 4: .5, 5: .25 })[p.b] || 1;
 }
 function buildMathQueue(d, { op, row }) {
+  if (op === 'gr') return Array.from({ length: 15 }, (_, i) => genTaskCard(genGroesse(), i, 'Größen'));
+  if (G8_GEN[op] || op === 'mix8') return Array.from({ length: 15 }, (_, i) => genTaskCard((G8_GEN[op] || G8_GEN[pick(Object.keys(G8_GEN))])(), i));
   const t = dayStr(), M = d.state.math || {}, rows = row === '*' ? [2, 3, 4, 5, 6, 7, 8, 9, 10] : [+row];
   const ops = op === 'mix' ? ['m', 'd'] : op === 'mul' ? ['m'] : op === 'div' ? ['d'] : [];
   const cand = [];
@@ -413,16 +485,26 @@ function rewardInfo(st) {
   return { title: r.title, target: r.target, got: Math.min(got, r.target), done: got >= r.target };
 }
 
-const promptOf = it => it.dir === 'df' ? it.card.translation : it.card.term;
+const promptOf = it => it.dir === 'df' ? it.card.translation : it.dir === 'pl' ? wordLabel(it.card) : it.card.term;
 function answerOf(it) {
   const c = it.card;
-  if (it.dir === 'fd') return c.translation;
+  if (it.dir === 'fd' || it.dir === 'ho') return c.translation;
+  if (it.dir === 'pl') return deForms(c).pl;
+  if (it.dir === 'zf') return deForms(c).zf;
   if (it.dir === 'wa') return deInfo(c).wa;
   if (it.dir === 'ar') return deInfo(c).art;
   if (it.dir === 'mm') return c.translation;
   return c.term;   // df, dk
 }
-const solOf = it => it.dir === 'ar' ? deInfo(it.card).art + ' ' + it.card.term : answerOf(it);
+function solOf(it) {
+  const c = it.card;
+  if (it.dir === 'ar') return deInfo(c).art + ' ' + c.term;
+  if (it.dir === 'ho') return c.term + ' = ' + c.translation;
+  if (it.dir === 'pl') return 'die ' + deForms(c).pl;
+  if (it.dir === 'zf') return 'er/sie/es ' + deForms(c).zf;
+  if (it.dir === 'st') { const f = deForms(c).st; return `${c.term} – ${f[0]} – am ${f[1]}`; }
+  return answerOf(it);
+}
 
 /* Diktat: genaue Schreibweise inkl. Groß-/Kleinschreibung */
 function dkCheck(val, c) {
@@ -449,12 +531,12 @@ function isDue(p, t) { return p && p.box > 0 && p.due && p.due <= t; }
 
 function grade(d, card, dir, ok) {
   const k = pkey(card.id, dir);
-  const p = Object.assign({ box: 0, due: null, correct: 0, wrong: 0 }, d.progress[k]);
+  const p = Object.assign({ box: 0, due: null, correct: 0, wrong: 0 }, prog(d, card.id, dir));
   if (ok) { p.box = p.box === 0 ? 2 : Math.min(5, p.box + 1); p.correct++; }
   else { p.box = 1; p.wrong++; }
   p.due = addDays(ok ? INTERVAL[p.box] : 1);
   p.updated_at = nowIso();
-  d.progress[k] = p; d.dirty.add(k);
+  setProg(d, card.id, dir, p);
 }
 
 function buildQueue(d, { lang, unit, dir, test }) {
@@ -802,8 +884,12 @@ function sync(manual) {
       const migrate = await syncLearners();
       let lids = migrate ? S.learners.map(l => l.id)
         : [S.prefs.learner, VIEW === 'parent' ? (PD() || {}).lid : null, VIEW === 'stats' ? (SD() || {}).lid : null];
+      lids = lids.concat(S.learners.filter(l => (DB[l.id] && DB[l.id].stateDirty) || LS.get('stateDirty_' + l.id, false)).map(l => l.id));
       lids = [...new Set(lids)].filter(id => id && learner(id));
       for (const id of lids) await syncLearner(data(id));
+      // Punkte/Woche der übrigen Kinder (für Familienziel und Wochenbericht) – nur Lesen
+      const others = (await API.req('app_state?select=learner_id,state,updated_at')) || [];
+      for (const r of others) { if (!learner(r.learner_id) || lids.includes(r.learner_id)) continue; const od = data(r.learner_id); od.state = mergeState(od.state, Object.assign({}, r.state, { updated_at: r.updated_at })); saveData(od); }
       if (migrate) await syncLearners();
       S.prefs.everSynced = true; S.prefs.lastSync = nowIso(); savePrefs();
       setSync('ok');
@@ -847,7 +933,7 @@ function show(v) {
   $('#tabbar').hidden = nonav;
   document.body.classList.toggle('nonav', nonav);
   $$('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  ({ login: renderLogin, pick: renderPick, home: renderHome, session: renderQ, done: renderDone, stats: renderStats, parent: renderParent })[v]();
+  ({ login: renderLogin, pick: renderPick, home: renderHome, session: renderQ, done: renderDone, stats: renderStats, parent: renderParent, formeln: renderFormeln })[v]();
   window.scrollTo(0, 0);
 }
 let toastT;
@@ -932,11 +1018,13 @@ function renderHome() {
     <div class="card empty"><div class="e">👨‍👩‍👧</div><h3>Eltern-Gerät</h3>
       <p class="muted small">Hier pflegst du die Vokabeln deiner Kinder und siehst ihren Lernfortschritt.</p>
       <div class="row"><button class="btn primary grow" data-act="go" data-v="parent">🔒 Eltern-Bereich</button><button class="btn grow" data-act="go" data-v="stats">📊 Statistik</button></div>
-    </div>`;
+    </div>
+    ${familyHtml(null)}
+    ${S.learners.map(l => weekCard(data(l.id), { compact: true, title: esc(l.name) + ' – diese Woche' })).join('')}`;
     return;
   }
   const P = S.prefs, st = d.state, me = learner(d.lid);
-  const showMath = st.showMath !== false;
+  const showMath = mathLevel(st) !== 'off';
   if (P.lang === 'ma' && !showMath) P.lang = bestLang(d, '');
   if (P.lang !== 'ma' && (!P.langChosen || !LANGS[P.lang])) P.lang = bestLang(d, P.lang);
   const subjects = Object.entries(LANGS).concat(showMath ? [['ma', MATH]] : []);
@@ -947,7 +1035,8 @@ function renderHome() {
     ${rw.done ? `<div class="small" style="margin-top:8px">🎉 Geschafft! Zeig das deinen Eltern.</div>` : ''}</div>` : '';
   const subjHtml = `<div class="label">Fach</div>
   <div class="chips">${subjects.map(([k, l]) => `<button data-act="lang" data-v="${k}" class="chip ${k === P.lang ? 'on' : ''}">${l.flag} ${esc(l.name)}</button>`).join('')}</div>`;
-  if (P.lang === 'ma') return renderHomeMath(d, me, rewardHtml, subjHtml);
+  if (P.lang === 'ma') return renderHomeMath(d, me, rewardHtml + familyHtml(d), subjHtml);
+  if (P.lang === 'la' && curDir('la') === 'lf') return renderHomeLatin(d, me, rewardHtml + familyHtml(d), subjHtml);
   document.body.dataset.lang = P.lang;
   const units = unitsOf(d, P.lang);
   if (P.unit !== '*' && !units.includes(P.unit)) P.unit = '*';
@@ -968,34 +1057,59 @@ function renderHome() {
     <div class="stat"><div class="big">🎯 ${tc}/${goal}</div><div class="bar ${tc >= goal ? 'done' : ''}"><i style="width:${pct(tc, goal)}%"></i></div><div class="muted small">heute</div></div>
   </div>
   ${rewardHtml}
+  ${familyHtml(d)}
   ${subjHtml}
   <div class="label">Unit</div>
   <div class="chips">${['*', ...units].map(u => `<button data-act="unit" data-v="${esc(u)}" class="chip ${u === P.unit ? 'on' : ''}">${u === '*' ? 'Alle' : esc(u)}</button>`).join('')}</div>
   ${de ? `<div class="label">Übung</div>
-  ${seg('dedir', [['wa', '🏷️ Wortart'], ['ar', 'Artikel'], ['dk', '🔊 Diktat'], ['mix', 'Mix']], dir)}` : isWi(P.lang) ? `<div class="label">Richtung</div>
+  <div class="chips">${[['wa', '🏷️ Wortart'], ['ar', 'Artikel'], ['dk', '🔊 Diktat'], ['pl', 'Mehrzahl'], ['zf', 'Vergangenheit'], ['st', 'Steigerung'], ['mix', 'Mix']].map(([v, l]) => `<button data-act="dedir" data-v="${v}" class="chip ${v === dir ? 'on' : ''}">${l}</button>`).join('')}</div>` : isWi(P.lang) ? `<div class="label">Richtung</div>
   ${seg('widir', [['fd', 'Fragen'], ['df', 'Umgekehrt'], ['mix', 'Gemischt']], dir)}
   <div class="label">Abfrage</div>
   ${seg('mode', [['type', '⌨️ Tippen'], ['mc', '🔘 Auswahl'], ['flip', '🃏 Karte']], P.mode)}` : `<div class="label">Richtung</div>
-  ${seg('dir', [['fd', code + ' → DE'], ['df', 'DE → ' + code], ['mix', 'Gemischt']], P.dir)}
-  <div class="label">Abfrage</div>
-  ${seg('mode', [['type', '⌨️ Tippen'], ['mc', '🔘 Auswahl'], ['flip', '🃏 Karte']], P.mode)}`}
+  ${seg('dir', [['fd', code + ' → DE'], ['df', 'DE → ' + code]].concat(L.speech ? [['ho', '🔊 Hören']] : []).concat(P.lang === 'la' ? [['lf', '📐 Formen']] : []).concat([['mix', 'Mix']]), dir)}
+  ${dir === 'ho' ? '' : `<div class="label">Abfrage</div>
+  ${seg('mode', [['type', '⌨️ Tippen'], ['mc', '🔘 Auswahl'], ['flip', '🃏 Karte']], P.mode)}`}`}
   ${all.length === 0 ? `
     <div class="card empty"><div class="e">📭</div><h3>Noch keine ${esc(L.name)}-${de ? 'Wörter' : isWi(P.lang) ? 'Karten' : 'Vokabeln'}</h3>
     <p class="muted small">Im Eltern-Bereich 🔒 können ${de ? 'Wörter' : isWi(P.lang) ? 'Karten' : 'Vokabeln'} importiert werden.</p></div>` : total === 0 ? `
     <div class="card empty"><div class="e">🤔</div><h3>Für diese Übung fehlen Angaben</h3>
-    <p class="muted small">${dir === 'ar' ? 'Für „Artikel“ braucht es Nomen mit der/die/das.' : 'Für „Wortart“ braucht es Wörter mit Wortart.'} Das lässt sich im Eltern-Bereich ergänzen.</p></div>` : `
+    <p class="muted small">${({ ar: 'Für „Artikel“ braucht es Nomen mit der/die/das.', wa: 'Für „Wortart“ braucht es Wörter mit Wortart.', pl: 'Für „Mehrzahl“ braucht es Nomen mit „Mehrzahl: die …“ in der Notiz.', zf: 'Für „Vergangenheit“ braucht es Verben mit z. B. „ich laufe, er lief“ in der Notiz.', st: 'Für „Steigerung“ braucht es Adjektive mit z. B. „größer, am größten“ in der Notiz.', ho: 'Hören gibt es für Sprachen mit Vorlesestimme.' })[dir] || 'Für diese Übung fehlen Angaben.'} Das lässt sich im Eltern-Bereich ergänzen.</p></div>` : `
     <button class="cta" data-act="start" ${q.length ? '' : 'disabled'}>${q.length ? `Los geht's · ${q.length} Karten` : 'Alles erledigt für heute 🎉'}</button>
     <button class="btn ghost wide" data-act="start-test">📝 Alle ${total} üben (Test-Modus)</button>
     <p class="muted small" style="text-align:center;margin-top:10px">Im Test-Modus wird alles abgefragt – ideal vor Klassenarbeiten.</p>`}`;
   $$('#v-home .chips').forEach(row => { const on = row.querySelector('.chip.on'); if (on) row.scrollLeft = on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2; });
 }
 
+function renderHomeLatin(d, me, extraHtml, subjHtml) {
+  const P = S.prefs, st = d.state, lv = levelInfo(st.xp || 0), tc = todayCount(d), goal = st.goal || 20, kind = P.lfKind || 'vn';
+  document.body.dataset.lang = 'la';
+  const seg = (act, items, c) => `<div class="seg">${items.map(([v, l]) => `<button data-act="${act}" data-v="${v}" class="${v === c ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const M = st.math || {}, cats = Object.keys(M).filter(k => k.startsWith('lf-'));
+  $('#v-home').innerHTML = `
+  <header class="top"><div><div class="muted small">${esc(fmtDate())}</div><h1>Hey ${esc(me ? me.name : '')} 👋</h1></div>${syncBadge()}</header>
+  <div class="statrow">
+    <div class="stat"><div class="big">🔥 ${currentStreak(d)}</div><div class="muted small">Tage in Folge</div></div>
+    <div class="stat"><div class="big">⭐ Lvl ${lv.lvl}</div><div class="bar"><i style="width:${pct(lv.cur, lv.need)}%"></i></div><div class="muted small">${lv.cur}/${lv.need} XP</div></div>
+    <div class="stat"><div class="big">🎯 ${tc}/${goal}</div><div class="bar ${tc >= goal ? 'done' : ''}"><i style="width:${pct(tc, goal)}%"></i></div><div class="muted small">heute</div></div>
+  </div>
+  ${extraHtml}
+  ${subjHtml}
+  <div class="label">Richtung</div>
+  ${seg('dir', [['fd', 'LA → DE'], ['df', 'DE → LA'], ['lf', '📐 Formen'], ['mix', 'Mix']], 'lf')}
+  <div class="label">Was bestimmen?</div>
+  ${seg('lfkind', [['v', 'Verben'], ['n', 'Nomen'], ['vn', 'Beides']], kind)}
+  <button class="cta" data-act="start-latin">Formen bestimmen · 15 Aufgaben</button>
+  <p class="muted small" style="text-align:center;margin-top:10px">Verben: Präsens bis Futur II (Aktiv). Nomen: a-, o- und konsonantische Deklination. Bei mehrdeutigen Formen zählt jede passende Bestimmung.</p>
+  ${cats.length ? `<div class="card"><h3>Bisher</h3>${cats.sort().map(k => { const p = M[k]; return `<div class="urow"><span class="n">${esc(k.slice(5))}</span><div class="bar"><i style="width:${pct(p.ok, p.ok + p.wr)}%"></i></div><span class="p">${pct(p.ok, p.ok + p.wr)} %</span></div>`; }).join('')}</div>` : ''}`;
+  $$('#v-home .chips').forEach(r => { const on = r.querySelector('.chip.on'); if (on) r.scrollLeft = on.offsetLeft - (r.clientWidth - on.offsetWidth) / 2; });
+}
 function renderHomeMath(d, me, rewardHtml, subjHtml) {
   const P = S.prefs, st = d.state, lv = levelInfo(st.xp || 0), tc = todayCount(d), goal = st.goal || 20;
   document.body.dataset.lang = 'ma';
-  const op = P.maOp || 'mul', row = P.maRow || '*';
+  const lvl = mathLevel(st), ops = MA_OPS[lvl === 'g8' ? 'g8' : 'gs'];
+  const op = ops.some(o => o[0] === P.maOp) ? P.maOp : ops[0][0], row = P.maRow || '*';
   const seg = (act, items, c) => `<div class="seg">${items.map(([v, l]) => `<button data-act="${act}" data-v="${v}" class="${v === c ? 'on' : ''}">${l}</button>`).join('')}</div>`;
-  const n = op === 'add' ? 20 : row === '*' || op === 'mix' ? 20 : (op === 'mix' ? 20 : 10);
+  const n = lvl === 'g8' || op === 'gr' ? 15 : op === 'add' ? 20 : row === '*' || op === 'mix' ? 20 : 10;
   $('#v-home').innerHTML = `
   <header class="top"><div><div class="muted small">${esc(fmtDate())}</div><h1>Hey ${esc(me ? me.name : '')} 👋</h1></div>${syncBadge()}</header>
   <div class="statrow">
@@ -1006,17 +1120,19 @@ function renderHomeMath(d, me, rewardHtml, subjHtml) {
   ${rewardHtml}
   ${subjHtml}
   <div class="label">Übung</div>
-  ${seg('maop', MA_MODES, op)}
-  ${op !== 'add' ? `<div class="label">Reihe</div>
+  <div class="chips">${ops.map(([v, l]) => `<button data-act="maop" data-v="${v}" class="chip ${v === op ? 'on' : ''}">${l}</button>`).join('')}</div>
+  ${['mul', 'div', 'mix'].includes(op) ? `<div class="label">Reihe</div>
   <div class="chips">${['*', 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => { const s = r === '*' ? null : mathRowStats(d, r);
     return `<button data-act="marow" data-v="${r}" class="chip ${String(r) === String(row) ? 'on' : ''}">${r === '*' ? 'Alle' : r + 'er'}${s && s.done ? ` · ${s.pct}%` : ''}</button>`; }).join('')}</div>` : ''}
   <button class="cta" data-act="start-math">Los geht's · ${n} Aufgaben</button>
-  <p class="muted small" style="text-align:center;margin-top:10px">${op === 'add' ? 'Plus und Minus im Kopf, Zahlen bis 1000.' : 'Aufgaben, die noch nicht sitzen, kommen öfter dran. Prozent = wie gut eine Reihe schon sitzt.'}</p>`;
+  <p class="muted small" style="text-align:center;margin-top:10px">${({ add: 'Plus und Minus im Kopf, Zahlen bis 1000.', gr: 'Längen, Gewichte, Zeit, Geld und Liter umrechnen. Kommazahlen mit Komma eingeben, z. B. 3,5.', gl: 'Gleichungen lösen – das Ergebnis für x eintippen (Minus mit „-“).', bi: 'Binomische Formeln ausmultiplizieren und faktorisieren – die richtige Lösung antippen.', te: 'Klammern auflösen und Terme zusammenfassen – die richtige Lösung antippen.', tw: 'Werte in Terme einsetzen und ausrechnen.', mix8: 'Gemischte Aufgaben aus allen Bereichen.' })[op] || 'Aufgaben, die noch nicht sitzen, kommen öfter dran. Prozent = wie gut eine Reihe schon sitzt.'}</p>`;
   $$('#v-home .chips').forEach(r => { const on = r.querySelector('.chip.on'); if (on) r.scrollLeft = on.offsetLeft - (r.clientWidth - on.offsetWidth) / 2; });
 }
 function startMath() {
   const d = AD(); if (!d) return;
-  const q = buildMathQueue(d, { op: S.prefs.maOp || 'mul', row: S.prefs.maRow || '*' });
+  const lvl = mathLevel(d.state), ops = MA_OPS[lvl === 'g8' ? 'g8' : 'gs'];
+  const op = ops.some(o => o[0] === S.prefs.maOp) ? S.prefs.maOp : ops[0][0];
+  const q = buildMathQueue(d, { op, row: S.prefs.maRow || '*' });
   SES = { d, queue: q, i: 0, combo: 0, xp: 0, mode: 'type', practice: false };
   show('session');
 }
@@ -1034,7 +1150,7 @@ function startSession(src) {
   show('session');
 }
 function mcOptions(it) {
-  const fd = it.dir === 'fd', c = it.card;
+  const fd = it.dir === 'fd' || it.dir === 'ho', c = it.card;
   const ansOf = v => fd ? v.translation : v.term;
   const correct = ansOf(c), seen = new Set([norm(correct)]), out = [correct];
   const pool = shuffle(SES.d.vocab.filter(v => v.lang === c.lang && v.id !== c.id));
@@ -1055,12 +1171,15 @@ function waOptions() {
 function renderQ() {
   if (!SES) return show('home');
   const it = cur(), c = it.card, fd = it.dir === 'fd', L = LANGS[c.lang] || {};
-  const de = isDeLang(c.lang), dk = it.dir === 'dk', ma = c.lang === 'ma', wi = isWi(c.lang);
+  const de = isDeLang(c.lang), dk = it.dir === 'dk', gen = it.dir === 'mm', ma = gen && c.lang === 'ma', wi = isWi(c.lang), ho = it.dir === 'ho';
   const vf = it.dir === 'df' ? verbForms(c) : null;
   document.body.dataset.lang = c.lang;
   let mode = SES.mode;
-  if (ma) mode = 'type';
-  else if (vf && mode === 'type') mode = 'verb';
+  if (gen) { if (c.opts) { mode = 'mc'; it.opts = c.opts; } else mode = 'type'; }
+  else if (ho) { it.opts = it.opts || mcOptions(it); mode = it.opts.length >= 4 ? 'mc' : 'type'; }
+  else if (it.dir === 'st') { mode = 'multi'; const f = deForms(c).st; it.fields = { labels: ['Vergleichsstufe', 'Höchststufe (am …)'], wants: [f[0], f[1]], strict: true }; }
+  else if (it.dir === 'pl' || it.dir === 'zf') mode = 'type';
+  else if (vf && mode === 'type') { mode = 'multi'; it.fields = { labels: ['Infinitive', 'Simple past', 'Past participle'], wants: vf, strict: false }; }
   else if (de) {
     if (it.dir === 'wa') { mode = 'mc'; it.opts = waOptions(); }
     else if (it.dir === 'ar') { mode = 'mc'; it.opts = ['der', 'die', 'das']; }
@@ -1068,9 +1187,9 @@ function renderQ() {
   } else if (mode === 'mc') { it.opts = it.opts || mcOptions(it); if (it.opts.length < 4) mode = 'flip'; }
   it.modeUsed = mode;
   const n = SES.queue.length;
-  const meta = ma ? `${MATH.flag} ${esc(c.unit)}` : de ? `${L.flag || ''} ${DE_NAMES[it.dir]}` : wi ? `${L.flag} ${fd ? 'Frage → Antwort' : 'Antwort → Frage'}`
+  const meta = gen ? (c.meta || `${MATH.flag} ${esc(c.unit)}`) : ho ? `${L.flag || ''} Hören` : de ? `${L.flag || ''} ${DE_NAMES[it.dir]}` : wi ? `${L.flag} ${fd ? 'Frage → Antwort' : 'Antwort → Frage'}`
     : vf ? `${L.flag || ''} Unregelmäßige Verben` : `${L.flag || ''} ${fd ? esc(L.name) + ' → Deutsch' : 'Deutsch → ' + esc(L.name)}`;
-  const ask = it.dir === 'wa' ? 'Welche Wortart ist das?' : it.dir === 'ar' ? 'Welcher Artikel passt?' : '';
+  const ask = gen ? (c.ask || '') : ({ wa: 'Welche Wortart ist das?', ar: 'Welcher Artikel passt?', pl: 'Wie heißt die Mehrzahl?', zf: 'Vergangenheit (Präteritum): er/sie/es …', st: 'Steigere das Adjektiv.' })[it.dir] || '';
   const canSpeech = 'speechSynthesis' in window;
   $('#v-session').innerHTML = `
   <div class="sesstop">
@@ -1080,32 +1199,34 @@ function renderQ() {
   </div>
   ${SES.combo >= 3 ? `<div class="combo">🔥 ${SES.combo}er-Serie!</div>` : ''}
   <div class="qcard ${it.retry ? 'retry' : ''}">
-    <div class="qmeta">${meta}${ma ? '' : ' · ' + esc(c.unit)}${it.retry ? ' · nochmal' : ''}${SES.practice ? ' · Übung' : ''}</div>
-    ${dk ? `<div class="prompt" style="font-size:20px">Hör gut zu und schreib das Wort auf.</div>
+    <div class="qmeta">${meta}${gen ? '' : ' · ' + esc(c.unit)}${it.retry ? ' · nochmal' : ''}${SES.practice ? ' · Übung' : ''}</div>
+    ${dk || ho ? `<div class="prompt" style="font-size:20px">${ho ? 'Hör zu: Was bedeutet das?' : 'Hör gut zu und schreib das Wort auf.'}</div>
       <div class="row" style="justify-content:center">
-        ${canSpeech ? `<button class="btn primary" data-act="dk-play">🔊 Anhören</button><button class="btn" data-act="dk-play" data-slow="1">🐢 Langsam</button>`
+        ${canSpeech ? `<button class="btn primary" data-act="${ho ? 'ho-play' : 'dk-play'}">🔊 Anhören</button><button class="btn" data-act="${ho ? 'ho-play' : 'dk-play'}" data-slow="1">🐢 Langsam</button>`
                     : `<button class="btn" data-act="dk-show">👀 Wort kurz zeigen</button>`}
       </div>
-      <div id="dkword" class="prompt" hidden style="margin-top:10px">${esc(wordLabel(c))}</div>`
-       : `${ask ? `<div class="small muted" style="margin-bottom:6px">${ask}</div>` : ''}<div class="prompt"${ma ? ' style="font-size:40px"' : ''}>${esc(promptOf(it))}${ma ? ' = ?' : ''}</div>`}
-    ${!dk && (fd || de) && L.speech ? `<button class="icon speak" data-act="speak" data-t="${esc(c.term)}" data-l="${c.lang}" aria-label="Vorlesen">🔊</button>` : ''}
+      <div id="dkword" class="prompt" hidden style="margin-top:10px">${esc(ho ? c.term : wordLabel(c))}</div>`
+       : `${ask ? `<div class="small muted" style="margin-bottom:6px">${ask}</div>` : ''}<div class="prompt"${gen ? ` style="font-size:${String(c.term).length <= 14 ? 38 : String(c.term).length <= 26 ? 28 : 22}px"` : ''}>${esc(promptOf(it))}${ma && !c.opts && !/\?/.test(c.term) && !c.ask ? ' = ?' : ''}</div>${c.sub ? `<div class="psub">${esc(c.sub)}</div>` : ''}`}
+    ${!dk && !ho && !gen && (fd || de) && L.speech ? `<button class="icon speak" data-act="speak" data-t="${esc(c.term)}" data-l="${c.lang}" aria-label="Vorlesen">🔊</button>` : ''}
   </div>
   <div id="ans"></div>
   <div id="fb"></div>`;
   const ans = $('#ans');
-  if (mode === 'verb') {
+  if (mode === 'multi') {
+    const F = it.fields.labels;
     ans.innerHTML = `
     <form id="tf3" class="typeform" autocomplete="off">
-      ${['Infinitive', 'Simple past', 'Past participle'].map((l, i) => `<div class="f"><label>${l}</label><input id="tv${i}" type="text" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="${i < 2 ? 'next' : 'done'}"></div>`).join('')}
+      ${F.map((l, i) => `<div class="f"><label>${l}</label><input id="tv${i}" type="text" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="${i < F.length - 1 ? 'next' : 'done'}"></div>`).join('')}
+      ${it.fields.strict ? `<div class="accbar">${['ä', 'ö', 'ü', 'ß'].map(a => `<button type="button" data-act="acc3" data-c="${a}">${a}</button>`).join('')}</div>` : ''}
       <div class="row" id="trow"><button type="button" class="btn ghost" data-act="dunno3">Weiß ich nicht</button><button class="btn primary grow" type="submit">Prüfen</button></div>
     </form>`;
     setTimeout(() => { const i = $('#tv0'); if (i) i.focus(); }, 60);
   } else if (mode === 'type') {
-    const acc = dk ? ['ä', 'ö', 'ü', 'ß', 'Ä', 'Ö', 'Ü'] : !fd && c.lang === 'fr' ? ['é', 'è', 'ê', 'à', 'â', 'ç', 'ô', 'î', 'û', 'ù', 'ë', 'ï', 'œ'] : [];
-    const ph = ma ? 'Ergebnis' : dk ? 'Wort schreiben …' : wi ? (fd ? 'Antwort …' : 'Frage / Begriff …') : fd ? 'Auf Deutsch …' : 'Auf ' + esc(L.name) + ' …';
+    const acc = dk || it.dir === 'pl' || it.dir === 'zf' ? ['ä', 'ö', 'ü', 'ß', 'Ä', 'Ö', 'Ü'] : !fd && c.lang === 'fr' ? ['é', 'è', 'ê', 'à', 'â', 'ç', 'ô', 'î', 'û', 'ù', 'ë', 'ï', 'œ'] : [];
+    const ph = gen ? (c.pre ? c.pre.trim() + ' …' : 'Ergebnis') : it.dir === 'pl' ? 'die …' : it.dir === 'zf' ? 'er/sie/es …' : ho ? 'Auf Deutsch …' : dk ? 'Wort schreiben …' : wi ? (fd ? 'Antwort …' : 'Frage / Begriff …') : fd ? 'Auf Deutsch …' : 'Auf ' + esc(L.name) + ' …';
     ans.innerHTML = `
     <form id="tf" class="typeform" autocomplete="off">
-      <input id="ti" type="text" ${ma ? 'inputmode="numeric" pattern="[0-9]*"' : ''} autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="done" placeholder="${ph}">
+      <input id="ti" type="text" ${gen && !c.signed ? (c.inputmode === 'decimal' ? 'inputmode="decimal"' : 'inputmode="numeric" pattern="[0-9]*"') : ''} autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="done" placeholder="${ph}">
       ${acc.length ? `<div class="accbar">${acc.map(a => `<button type="button" data-act="acc" data-c="${a}">${a}</button>`).join('')}</div>` : ''}
       <div class="row" id="trow"><button type="button" class="btn ghost" data-act="dunno">Weiß ich nicht</button><button class="btn primary grow" type="submit">Prüfen</button></div>
     </form>`;
@@ -1115,7 +1236,8 @@ function renderQ() {
   } else {
     ans.innerHTML = `<button class="btn primary wide" data-act="flip">Aufdecken</button>`;
   }
-  if (dk && canSpeech) { const a = deInfo(c).art; speak((a ? a + ' ' : '') + c.term, 'de', 0.85); }   // direkt im Tipp-Ereignis, sonst blockiert iOS
+  if (ho && canSpeech) speak(c.term, c.lang, 0.85);
+  else if (dk && canSpeech) { const a = deInfo(c).art; speak((a ? a + ' ' : '') + c.term, 'de', 0.85); }   // direkt im Tipp-Ereignis, sonst blockiert iOS
   else if (fd && L.speech && S.prefs.autoSpeak) speak(c.term, c.lang);
 }
 function applyAnswer(ok) {
@@ -1126,7 +1248,7 @@ function applyAnswer(ok) {
     if (it.dir === 'mm') gradeMath(d, it.card.mkey, ok);
     else if (!SES.practice) {
       const k = pkey(it.card.id, it.dir);
-      it.before = d.progress[k] ? Object.assign({}, d.progress[k]) : null;
+      { const bp = prog(d, it.card.id, it.dir); it.before = bp ? Object.assign({}, bp) : null; }
       it.wasDirty = d.dirty.has(k);
       grade(d, it.card, it.dir, ok);
     }
@@ -1138,6 +1260,7 @@ function applyAnswer(ok) {
   if (st.lastDay !== t) { st.streak = st.lastDay === addDays(-1) ? (st.streak || 0) + 1 : 1; st.lastDay = t; }
   it.gain = ok ? (it.retry ? 2 : SES.practice ? 5 : 10 + (SES.combo >= 5 ? 5 : 0)) : 0;
   st.xp = (st.xp || 0) + it.gain; SES.xp += it.gain;
+  logAnswer(st, ok, it.gain);
   touchState(d); saveData(d);
 }
 function overrideCorrect() {
@@ -1145,8 +1268,8 @@ function overrideCorrect() {
   if (!it.retry) {
     if (!SES.practice) {
       const k = pkey(it.card.id, it.dir);
-      if (it.before) d.progress[k] = it.before; else delete d.progress[k];
-      if (!it.wasDirty) d.dirty.delete(k);
+      setProg(d, it.card.id, it.dir, it.before);
+      if (!it.wasDirty && !isExt(it.dir)) d.dirty.delete(k);
       grade(d, it.card, it.dir, true);
     }
     const idx = SES.queue.indexOf(it.retryRef); if (idx > -1) SES.queue.splice(idx, 1);
@@ -1154,6 +1277,7 @@ function overrideCorrect() {
   it.ok = true; SES.combo = (it.prevCombo || 0) + 1;
   it.gain = it.retry ? 2 : SES.practice ? 5 : 10;
   d.state.xp = (d.state.xp || 0) + it.gain; SES.xp += it.gain;
+  { const e = (d.state.log || {})[dayStr()]; if (e) { e.ok++; e.xp += it.gain; } }
   touchState(d); saveData(d);
   renderFeedback({ overridden: true });
 }
@@ -1161,29 +1285,33 @@ function answerType(dunno) {
   const it = cur(); if (it.answered) return;
   const inp = $('#ti'); const val = dunno ? '' : inp.value;
   if (!dunno && !val.trim()) { inp.focus(); return; }
-  const r = dunno ? { ok: false } : it.dir === 'dk' ? dkCheck(val, it.card) : it.dir === 'mm' ? mmCheck(val, it.card) : check(val, answerOf(it));
+  const r = dunno ? { ok: false } : it.dir === 'dk' ? dkCheck(val, it.card) : it.dir === 'mm' ? mmCheck(val, it.card)
+    : it.dir === 'pl' ? strictCheck(val, deForms(it.card).pl, ['die']) : it.dir === 'zf' ? strictCheck(val, deForms(it.card).zf, ['er', 'sie', 'es']) : check(val, answerOf(it));
   applyAnswer(r.ok);
   inp.disabled = true; inp.blur(); $('#trow').hidden = true;
   const ab = $('.accbar'); if (ab) ab.hidden = true;
   renderFeedback({ given: dunno ? null : val, hint: r.hint, near: r.near });
 }
 function mmCheck(val, c) {
-  const u = String(val).replace(/[\s.]/g, ''), want = String(c.translation);
-  if (u === want) return { ok: true };
-  if (/^\d+$/.test(u) && Math.abs(+u - +want) <= 10 && /[+−]/.test(c.term)) return { ok: false, near: true, hint: 'Knapp! Rechne nochmal Schritt für Schritt.' };
+  const u = parseNum(String(val).replace(/^\s*x\s*=\s*/i, '')), want = parseNum(c.translation);
+  if (!isNaN(u) && Math.abs(u - want) < 1e-9) return { ok: true };
+  if (isNaN(u)) return { ok: false, hint: 'Bitte nur eine Zahl eingeben' + (c.signed ? ' (Minus mit „-“).' : '.') };
+  if (c.unitHint && [10, 100, 1000, 60].some(f => Math.abs(u * f - want) < 1e-9 || Math.abs(u - want * f) < 1e-9)) return { ok: false, near: true, hint: 'Achte auf die Umrechnungszahl (10, 100, 1000 oder 60).' };
+  if (!c.signed && !c.unitHint && Math.abs(u - want) <= 10 && /[+−]/.test(c.term)) return { ok: false, near: true, hint: 'Knapp! Rechne nochmal Schritt für Schritt.' };
+  if (c.signed && Math.abs(u + want) < 1e-9 && want !== 0) return { ok: false, near: true, hint: 'Fast – achte auf das Vorzeichen.' };
   return { ok: false };
 }
 function answerVerb(dunno) {
   const it = cur(); if (it.answered) return;
-  const want = verbForms(it.card), vals = [0, 1, 2].map(i => $('#tv' + i).value);
+  const F = it.fields, want = F.wants, idx = want.map((_, i) => i), vals = idx.map(i => $('#tv' + i).value);
   if (!dunno && vals.every(v => !v.trim())) { $('#tv0').focus(); return; }
-  const res = vals.map((v, i) => !dunno && check(v, want[i]).ok);
+  const res = vals.map((v, i) => !dunno && (F.strict ? strictCheck(v, want[i], i === 1 && it.dir === 'st' ? ['am'] : []).ok : check(v, want[i]).ok));
   const ok = res.every(Boolean);
   applyAnswer(ok);
-  [0, 1, 2].forEach(i => { const e = $('#tv' + i); e.disabled = true; e.style.borderColor = res[i] ? 'var(--ok)' : 'var(--bad)'; });
-  $('#trow').hidden = true;
-  const wrong = ['Infinitive', 'Simple past', 'Past participle'].filter((_, i) => !res[i]);
-  renderFeedback({ given: dunno ? null : vals.join(' – '), hint: !ok && !dunno && wrong.length < 3 ? 'Noch nicht richtig: ' + wrong.join(', ') : undefined });
+  idx.forEach(i => { const e = $('#tv' + i); e.disabled = true; e.style.borderColor = res[i] ? 'var(--ok)' : 'var(--bad)'; });
+  $('#trow').hidden = true; const ab = $('.accbar'); if (ab) ab.hidden = true;
+  const wrong = F.labels.filter((_, i) => !res[i]);
+  renderFeedback({ given: dunno ? null : vals.join(' – '), hint: !ok && !dunno && wrong.length < F.labels.length ? 'Noch nicht richtig: ' + wrong.join(', ') : undefined });
 }
 function answerMC(i) {
   const it = cur(); if (it.answered) return;
@@ -1209,7 +1337,7 @@ function renderFeedback(info) {
   if (info.given !== undefined) it.fbInfo = info; else info = Object.assign({}, it.fbInfo || {}, info);
   const head = it.ok ? (info.overridden ? 'Okay, zählt als richtig ✅' : pick(['Richtig! ✅', 'Stark! 💪', 'Genau! 🎯', 'Top! ⭐', 'Sauber! 🚀']))
     : (info.near ? 'Knapp daneben 🤏' : 'Leider falsch ❌');
-  const showSol = it.modeUsed === 'type' || it.modeUsed === 'verb';
+  const showSol = it.modeUsed === 'type' || it.modeUsed === 'multi';
   $('#fb').innerHTML = `
   <div class="fb ${it.ok ? 'ok' : 'bad'}">
     <div class="fbhead">${head}${it.gain ? `<span class="xp">+${it.gain} XP</span>` : ''}</div>
@@ -1219,9 +1347,10 @@ function renderFeedback(info) {
     ${it.dir === 'ar' && it.ok ? `<div class="hint">👍 ${esc(solOf(it))}</div>` : ''}
     ${info.given && !it.ok ? `<div class="given">Deine Antwort: <s>${esc(info.given)}</s></div>` : ''}
     ${info.hint ? `<div class="hint">💡 ${esc(info.hint)}</div>` : ''}
+    ${c.explain ? `<div class="hint">📝 ${esc(c.explain)}</div>` : ''}
     ${c.note ? `<div class="note">${esc(c.note)}</div>` : ''}
     <div class="row">
-      ${!it.ok && (it.modeUsed === 'type' || it.modeUsed === 'verb') && it.dir !== 'dk' && it.dir !== 'mm' && info.given ? `<button class="btn ghost" data-act="override">Ich hatte recht</button>` : ''}
+      ${!it.ok && (it.modeUsed === 'type' || it.modeUsed === 'multi') && !['dk', 'mm', 'pl', 'zf', 'st'].includes(it.dir) && info.given ? `<button class="btn ghost" data-act="override">Ich hatte recht</button>` : ''}
       <button class="btn primary grow" data-act="next">Weiter →</button>
     </div>
   </div>`;
@@ -1258,10 +1387,370 @@ function renderDone() {
     <p class="muted">${tc >= goal ? '🎯 Tagesziel geschafft!' : `🎯 Noch ${goal - tc} bis zum Tagesziel`} · 🔥 ${sk} ${sk === 1 ? 'Tag' : 'Tage'} in Folge</p>
   </div>
   ${sm.wrong.length ? `<div class="card"><h3>Das üben wir nochmal</h3>
-    ${sm.wrong.map(w => `<div class="wl"><span><b>${esc(w.dir === 'df' ? w.card.translation : w.dir === 'dk' ? wordLabel(w.card) : w.card.term)}</b></span><span>${esc(w.dir === 'dk' ? '✍️ Diktat' : isDeLang(w.card.lang) ? DE_NAMES[w.dir] + ': ' + solOf(w) : solOf(w))}</span></div>`).join('')}
+    ${sm.wrong.map(w => `<div class="wl"><span><b>${esc(w.dir === 'df' ? w.card.translation : w.dir === 'dk' || w.dir === 'pl' ? wordLabel(w.card) : w.card.term)}</b></span><span>${esc(w.dir === 'dk' ? '✍️ Diktat' : isDeLang(w.card.lang) ? DE_NAMES[w.dir] + ': ' + solOf(w) : solOf(w))}</span></div>`).join('')}
   </div>
   <button class="btn primary wide" data-act="retry-wrong">🔁 Fehler gleich nochmal üben</button>` : ''}
   <button class="btn ghost wide" style="margin-top:10px" data-act="home">Fertig</button>`;
+}
+
+/* ============================================================
+   Version 1.6 – Größen, Mathe Klasse 8, Latein-Formen,
+   Wochenbericht, Familien-Wochenziel, Formelsammlung
+   ============================================================ */
+const fmtNum = (x, dec) => {
+  const s = dec != null ? x.toFixed(dec) : String(Math.round(x * 1000) / 1000);
+  return s.replace('.', ',');
+};
+function parseNum(s) {
+  let t = String(s == null ? '' : s).trim().replace(/\s/g, '').replace(/−/g, '-');
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)) t = t.replace(/\./g, '');   // 1.000 als Tausenderpunkt
+  t = t.replace(',', '.');
+  return /^-?\d+(\.\d+)?$/.test(t) ? parseFloat(t) : NaN;
+}
+const sgn = n => n < 0 ? '−' + Math.abs(n) : String(n);
+
+/* ---------- Mathe-Stufe je Kind ---------- */
+const mathLevel = st => st.mathLevel || (st.showMath === false ? 'off' : 'gs');
+const MA_OPS = {
+  gs: [['mul', '· Mal'], ['div', ': Geteilt'], ['add', '+/− Kopfrechnen'], ['gr', '📏 Größen'], ['mix', 'Mix']],
+  g8: [['gl', 'Gleichungen'], ['bi', 'Binomische Formeln'], ['te', 'Terme'], ['tw', 'Termwerte'], ['mix8', 'Mix']]
+};
+const MA_LABEL = { 'g-len': 'Längen', 'g-mass': 'Gewichte', 'g-time': 'Zeit', 'g-money': 'Geld', 'g-vol': 'Liter', 'x-gl': 'Gleichungen', 'x-bi': 'Binomische Formeln', 'x-te': 'Terme', 'x-tw': 'Termwerte' };
+
+/* ---------- Größen umrechnen (Klasse 3/4) ---------- */
+function genGroesse() {
+  const R = randInt, P = pick;
+  const t = P(['len', 'len', 'mass', 'time', 'time', 'money', 'vol']);
+  let q, a, dec = null;
+  if (t === 'len') {
+    const k = R(1, 6);
+    if (k === 1) { const x = R(1, 9); q = `${x} km = ? m`; a = x * 1000; }
+    else if (k === 2) { const x = R(2, 9); q = `${x} m = ? cm`; a = x * 100; }
+    else if (k === 3) { const x = R(2, 9); q = `${x} cm = ? mm`; a = x * 10; }
+    else if (k === 4) { const m = R(1, 5), c = R(1, 9) * 5; q = `${m} m ${c} cm = ? cm`; a = m * 100 + c; }
+    else if (k === 5) { const x = R(11, 95) * 10; q = `${x} cm = ? m`; a = x / 100; }
+    else { const x = R(1, 9) + R(1, 9) / 10; q = `${fmtNum(x)} m = ? cm`; a = Math.round(x * 100); }
+  } else if (t === 'mass') {
+    const k = R(1, 4);
+    if (k === 1) { const x = R(2, 9); q = `${x} kg = ? g`; a = x * 1000; }
+    else if (k === 2) { const x = R(2, 9); q = `${x} t = ? kg`; a = x * 1000; }
+    else if (k === 3) { const kg = R(1, 4), g = R(1, 9) * 50; q = `${kg} kg ${g} g = ? g`; a = kg * 1000 + g; }
+    else { const x = R(3, 19) * 500; q = `${x} g = ? kg`; a = x / 1000; }
+  } else if (t === 'time') {
+    const k = R(1, 5);
+    if (k === 1) { const x = R(2, 5); q = `${x} h = ? min`; a = x * 60; }
+    else if (k === 2) { const h = R(1, 3), m = R(1, 11) * 5; q = `${h} h ${m} min = ? min`; a = h * 60 + m; }
+    else if (k === 3) { const x = R(2, 6); q = `${x} min = ? s`; a = x * 60; }
+    else if (k === 4) { const x = R(2, 4); q = `${x} Tage = ? h`; a = x * 24; }
+    else { const x = R(2, 6); q = `${x * 60} min = ? h`; a = x; }
+  } else if (t === 'money') {
+    const k = R(1, 4);
+    if (k === 1) { const x = R(2, 9); q = `${x} € = ? ct`; a = x * 100; }
+    else if (k === 2) { const e = R(1, 9), c = R(1, 19) * 5; q = `${e},${String(c).padStart(2, '0')} € = ? ct`; a = e * 100 + c; }
+    else if (k === 3) { const x = R(11, 99) * 10; q = `${x} ct = ? €`; a = x / 100; dec = 2; }
+    else { const e = R(1, 5), c = R(1, 9) * 10; q = `${e} € ${c} ct = ? ct`; a = e * 100 + c; }
+  } else {
+    const k = R(1, 2);
+    if (k === 1) { const x = R(2, 5); q = `${x} l = ? ml`; a = x * 1000; }
+    else { const x = R(1, 9) * 250; q = `${x} ml = ? l`; a = x / 1000; }
+  }
+  return { key: 'g-' + t, q, a: dec ? fmtNum(a, dec) : fmtNum(a), unitHint: true, inputmode: 'decimal' };
+}
+
+/* ---------- Klasse 7/8: Gleichungen, Binomische Formeln, Terme, Termwerte ---------- */
+function mono(c, v) { return c === 1 ? v : c === -1 ? '−' + v : c + v; }
+function poly(parts) {   // parts: [[koeff, 'x²'], [koeff, 'x'], [koeff, '']]
+  let s = '';
+  for (const [c, v] of parts) {
+    if (!c) continue;
+    const abs = Math.abs(c), body = v ? (abs === 1 ? v : abs + v) : String(abs);
+    s += s ? (c < 0 ? ' − ' : ' + ') + body : (c < 0 ? '−' : '') + body;
+  }
+  return s || '0';
+}
+function uniqOpts(right, cands) {
+  const out = [right];
+  for (const c of cands) if (c && !out.includes(c)) out.push(c);
+  return shuffle(out.slice(0, 4));
+}
+function genGleichung() {
+  const R = randInt; let x = R(-6, 12); if (x === 0) x = 3;
+  const k = R(1, 4); let q, steps;
+  if (k === 1) { const a = R(2, 9), b = R(-15, 15) || 4, c = a * x + b; q = `${poly([[a, 'x'], [b, '']])} = ${sgn(c)}`; steps = `${a}x = ${sgn(c - b)} → x = ${sgn(x)}`; }
+  else if (k === 2) { let a = R(2, 9), cc = R(1, 8); if (cc === a) cc = a - 1 || 1; const b = R(-12, 12) || 5, d = a * x + b - cc * x; q = `${poly([[a, 'x'], [b, '']])} = ${poly([[cc, 'x'], [d, '']])}`; steps = `${a - cc}x = ${sgn(d - b)} → x = ${sgn(x)}`; }
+  else if (k === 3) { const a = R(2, 6), b = R(-8, 8) || 2, c = a * (x + b); q = `${a}(${poly([[1, 'x'], [b, '']])}) = ${sgn(c)}`; steps = `x ${b < 0 ? '−' : '+'} ${Math.abs(b)} = ${sgn(c / a)} → x = ${sgn(x)}`; }
+  else { const a = R(2, 5), xx = a * R(1, 6) * (Math.random() < .2 ? -1 : 1), b = R(1, 9), c = xx / a + b; x = xx; q = `x : ${a} + ${b} = ${sgn(c)}`; steps = `x : ${a} = ${sgn(c - b)} → x = ${sgn(x)}`; }
+  return { key: 'x-gl', ask: 'Löse die Gleichung.', q, a: sgn(x), pre: 'x = ', explain: 'Lösungsweg: ' + steps, signed: true };
+}
+function genBinom() {
+  const R = randInt, v = pick(['x', 'a', 'b']), m = pick([1, 1, 2, 3]), k = R(1, 9), t = R(1, 6);
+  const sq = mono(m * m, v + '²'), mv = mono(m, v), lin = 2 * m * k;
+  if (t === 1) { const r = poly([[m * m, v + '²'], [lin, v], [k * k, '']]);
+    return { key: 'x-bi', ask: 'Multipliziere aus (1. binomische Formel).', q: `(${mv} + ${k})²`, a: r, opts: uniqOpts(r, [poly([[m * m, v + '²'], [k * k, '']]), poly([[m * m, v + '²'], [m * k, v], [k * k, '']]), poly([[m * m, v + '²'], [lin, v], [2 * k, '']]), poly([[m, v + '²'], [lin, v], [k * k, '']])]), explain: '(a + b)² = a² + 2ab + b²' }; }
+  if (t === 2) { const r = poly([[m * m, v + '²'], [-lin, v], [k * k, '']]);
+    return { key: 'x-bi', ask: 'Multipliziere aus (2. binomische Formel).', q: `(${mv} − ${k})²`, a: r, opts: uniqOpts(r, [poly([[m * m, v + '²'], [-(k * k), '']]), poly([[m * m, v + '²'], [lin, v], [k * k, '']]), poly([[m * m, v + '²'], [-lin, v], [-(k * k), '']]), poly([[m * m, v + '²'], [-m * k, v], [k * k, '']])]), explain: '(a − b)² = a² − 2ab + b²' }; }
+  if (t === 3) { const r = poly([[m * m, v + '²'], [-(k * k), '']]);
+    return { key: 'x-bi', ask: 'Multipliziere aus (3. binomische Formel).', q: `(${mv} + ${k})(${mv} − ${k})`, a: r, opts: uniqOpts(r, [poly([[m * m, v + '²'], [k * k, '']]), poly([[m * m, v + '²'], [-lin, v], [-(k * k), '']]), poly([[m * m, v + '²'], [lin, v], [-(k * k), '']]), poly([[m, v + '²'], [-(k * k), '']])]), explain: '(a + b)(a − b) = a² − b²' }; }
+  const forms = [[`(${mv} + ${k})²`, poly([[m * m, v + '²'], [lin, v], [k * k, '']])], [`(${mv} − ${k})²`, poly([[m * m, v + '²'], [-lin, v], [k * k, '']])], [`(${mv} + ${k})(${mv} − ${k})`, poly([[m * m, v + '²'], [-(k * k), '']])]];
+  const [f, e] = forms[(t - 4) % 3];
+  const others = forms.filter(x => x[0] !== f).map(x => x[0]).concat([`(${mv} + ${k * k})²`, `(${mono(m * m, v)} − ${k})²`]);
+  return { key: 'x-bi', ask: 'Schreibe als Produkt (Faktorisieren).', q: e, a: f, opts: uniqOpts(f, others), explain: 'Erkennen: a² ± 2ab + b² oder a² − b²' };
+}
+function genTerm() {
+  const R = randInt, t = R(1, 4);
+  if (t === 1) { const a = R(2, 9), b = R(1, 9), c = R(1, 9) * (Math.random() < .5 ? -1 : 1); const r = poly([[a * b, 'x'], [a * c, '']]);
+    return { key: 'x-te', ask: 'Löse die Klammer auf.', q: `${a}(${poly([[b, 'x'], [c, '']])})`, a: r, opts: uniqOpts(r, [poly([[a * b, 'x'], [c, '']]), poly([[a + b, 'x'], [a * c, '']]), poly([[a * b, 'x'], [-a * c, '']]), poly([[b, 'x'], [a * c, '']])]), explain: 'Jedes Glied in der Klammer wird mit dem Faktor multipliziert.' }; }
+  if (t === 2) { const a = R(2, 6), b = R(1, 9), c = R(1, 9); const r = poly([[-a * b, 'x'], [a * c, '']]);
+    return { key: 'x-te', ask: 'Löse die Klammer auf.', q: `−${a}(${poly([[b, 'x'], [-c, '']])})`, a: r, opts: uniqOpts(r, [poly([[-a * b, 'x'], [-a * c, '']]), poly([[a * b, 'x'], [-a * c, '']]), poly([[-a * b, 'x'], [-c, '']]), poly([[-a * b, 'x'], [c, '']])]), explain: 'Minus vor der Klammer: Alle Vorzeichen in der Klammer drehen sich um.' }; }
+  if (t === 3) { const p = R(2, 9), q2 = R(1, 9), r2 = R(-6, 6) || 2, s = R(-9, 9) || -3; const r = poly([[p + r2, 'x'], [q2 + s, 'y']]);
+    return { key: 'x-te', ask: 'Fasse zusammen.', q: `${poly([[p, 'x'], [q2, 'y'], [r2, 'x'], [s, 'y']])}`, a: r, opts: uniqOpts(r, [poly([[p + r2 + q2 + s, 'xy']]), poly([[p - r2, 'x'], [q2 + s, 'y']]), poly([[p + r2, 'x'], [q2 - s, 'y']]), poly([[p + r2 + 1, 'x'], [q2 + s, 'y']])]), explain: 'Nur gleichartige Glieder (x mit x, y mit y) zusammenfassen.' }; }
+  const a = R(1, 7), b = R(1, 7) * (Math.random() < .4 ? -1 : 1); const r = poly([[1, 'x²'], [a + b, 'x'], [a * b, '']]);
+  return { key: 'x-te', ask: 'Multipliziere aus.', q: `(${poly([[1, 'x'], [a, '']])})(${poly([[1, 'x'], [b, '']])})`, a: r, opts: uniqOpts(r, [poly([[1, 'x²'], [a * b, '']]), poly([[1, 'x²'], [a * b, 'x'], [a + b, '']]), poly([[1, 'x²'], [a + b, 'x'], [a + b, '']]), poly([[2, 'x'], [a * b, '']])]), explain: 'Jedes Glied der ersten Klammer mit jedem Glied der zweiten multiplizieren.' };
+}
+function genTermwert() {
+  const R = randInt, a = R(1, 5), b = R(-6, 6), c = R(-9, 9), x = R(-4, 5) || 2;
+  const val = a * x * x + b * x + c;
+  return { key: 'x-tw', ask: `Berechne den Term für x = ${sgn(x)}.`, q: poly([[a, 'x²'], [b, 'x'], [c, '']]), a: sgn(val), signed: true,
+    explain: `${a === 1 ? '' : a + ' · '}(${sgn(x)})²${b ? ` ${b < 0 ? '−' : '+'} ${Math.abs(b)} · (${sgn(x)})` : ''}${c ? ` ${c < 0 ? '−' : '+'} ${Math.abs(c)}` : ''} = ${sgn(val)}` };
+}
+const G8_GEN = { gl: genGleichung, bi: genBinom, te: genTerm, tw: genTermwert };
+function genTaskCard(f, i, label) {
+  return { card: { id: f.key + '#' + i, mkey: f.key, lang: 'ma', unit: label || MA_LABEL[f.key] || 'Mathe', term: f.q, translation: String(f.a), ask: f.ask, opts: f.opts, explain: f.explain, signed: f.signed, pre: f.pre, unitHint: f.unitHint, inputmode: f.inputmode }, dir: 'mm' };
+}
+
+/* ---------- Latein-Formen bestimmen (Klasse 6–8) ---------- */
+const LA_VERBS = [
+  ['vocare', 'rufen, nennen', 'a', 'voca', 'vocav'], ['laudare', 'loben', 'a', 'lauda', 'laudav'], ['clamare', 'rufen, schreien', 'a', 'clama', 'clamav'],
+  ['spectare', 'betrachten', 'a', 'specta', 'spectav'], ['exspectare', 'warten, erwarten', 'a', 'exspecta', 'exspectav'], ['properare', 'eilen', 'a', 'propera', 'properav'],
+  ['dare', 'geben', 'a', 'da', 'ded'], ['monere', 'mahnen', 'e', 'mone', 'monu'], ['tacere', 'schweigen', 'e', 'tace', 'tacu'],
+  ['videre', 'sehen', 'e', 'vide', 'vid'], ['ridere', 'lachen', 'e', 'ride', 'ris'], ['audire', 'hören', 'i', 'audi', 'audiv'],
+  ['venire', 'kommen', 'i', 'veni', 'ven'], ['currere', 'laufen, eilen', 'k', 'curr', 'cucurr'], ['dicere', 'sagen', 'k', 'dic', 'dix'],
+  ['mittere', 'schicken', 'k', 'mitt', 'mis'], ['petere', 'erstreben, bitten', 'k', 'pet', 'petiv'], ['surgere', 'aufstehen', 'k', 'surg', 'surrex'],
+  ['capere', 'fassen, nehmen', 'ki', 'cap', 'cep'], ['esse', 'sein', 'esse', '', '']
+];
+const LA_TENSES = ['Präsens', 'Imperfekt', 'Futur I', 'Perfekt', 'Plusquamperfekt', 'Futur II'];
+const LA_PERS = ['1. Pers. Sg.', '2. Pers. Sg.', '3. Pers. Sg.', '1. Pers. Pl.', '2. Pers. Pl.', '3. Pers. Pl.'];
+const LA_ESSE = {
+  'Präsens': ['sum', 'es', 'est', 'sumus', 'estis', 'sunt'], 'Imperfekt': ['eram', 'eras', 'erat', 'eramus', 'eratis', 'erant'],
+  'Futur I': ['ero', 'eris', 'erit', 'erimus', 'eritis', 'erunt'], 'Perfekt': ['fui', 'fuisti', 'fuit', 'fuimus', 'fuistis', 'fuerunt'],
+  'Plusquamperfekt': ['fueram', 'fueras', 'fuerat', 'fueramus', 'fueratis', 'fuerant'], 'Futur II': ['fuero', 'fueris', 'fuerit', 'fuerimus', 'fueritis', 'fuerint']
+};
+function laVerbTable([inf, , k, st, pf]) {
+  if (k === 'esse') return LA_ESSE;
+  const T = {}, E = ['s', 't', 'mus', 'tis'];
+  T['Präsens'] = k === 'a' ? [st.slice(0, -1) + 'o', ...E.map(e => st + e), st + 'nt']
+    : k === 'e' ? [st + 'o', ...E.map(e => st + e), st + 'nt']
+    : k === 'i' ? [st + 'o', ...E.map(e => st + e), st + 'unt']
+    : k === 'k' ? [st + 'o', st + 'is', st + 'it', st + 'imus', st + 'itis', st + 'unt']
+    : [st + 'io', st + 'is', st + 'it', st + 'imus', st + 'itis', st + 'iunt'];
+  const ib = k === 'a' || k === 'e' ? st : k === 'i' ? st + 'e' : k === 'k' ? st + 'e' : st + 'ie';
+  T['Imperfekt'] = ['bam', 'bas', 'bat', 'bamus', 'batis', 'bant'].map(e => ib + e);
+  T['Futur I'] = k === 'a' || k === 'e' ? ['bo', 'bis', 'bit', 'bimus', 'bitis', 'bunt'].map(e => st + e)
+    : ['am', 'es', 'et', 'emus', 'etis', 'ent'].map(e => (k === 'ki' ? st + 'i' : st) + e);
+  T['Perfekt'] = ['i', 'isti', 'it', 'imus', 'istis', 'erunt'].map(e => pf + e);
+  T['Plusquamperfekt'] = ['eram', 'eras', 'erat', 'eramus', 'eratis', 'erant'].map(e => pf + e);
+  T['Futur II'] = ['ero', 'eris', 'erit', 'erimus', 'eritis', 'erint'].map(e => pf + e);
+  return T;
+}
+const LA_NOUNS = [
+  ['puella', 'Mädchen', 'a', 'puell'], ['amica', 'Freundin', 'a', 'amic'], ['porta', 'Tor', 'a', 'port'], ['turba', 'Menschenmenge', 'a', 'turb'], ['via', 'Weg, Straße', 'a', 'vi'],
+  ['servus', 'Sklave', 'om', 'serv'], ['amicus', 'Freund', 'om', 'amic'], ['equus', 'Pferd', 'om', 'equ'], ['ludus', 'Spiel, Schule', 'om', 'lud'], ['populus', 'Volk', 'om', 'popul'],
+  ['templum', 'Tempel', 'on', 'templ'], ['forum', 'Marktplatz', 'on', 'for'], ['signum', 'Zeichen', 'on', 'sign'], ['praemium', 'Belohnung', 'on', 'praemi'], ['aedificium', 'Gebäude', 'on', 'aedifici'],
+  ['senator', 'Senator', 'k', 'senator'], ['victor', 'Sieger', 'k', 'victor'], ['rex', 'König', 'k', 'reg'], ['homo', 'Mensch', 'k', 'homin'], ['mercator', 'Kaufmann', 'k', 'mercator']
+];
+const LA_CASES = ['Nominativ', 'Genitiv', 'Dativ', 'Akkusativ', 'Ablativ'];
+const LA_END = {
+  a: [['a', 'ae', 'ae', 'am', 'a'], ['ae', 'arum', 'is', 'as', 'is']],
+  om: [['us', 'i', 'o', 'um', 'o'], ['i', 'orum', 'is', 'os', 'is']],
+  on: [['um', 'i', 'o', 'um', 'o'], ['a', 'orum', 'is', 'a', 'is']],
+  k: [[null, 'is', 'i', 'em', 'e'], ['es', 'um', 'ibus', 'es', 'ibus']]
+};
+function laNounTable([nom, , k, st]) {
+  const out = {};
+  [['Singular', 0], ['Plural', 1]].forEach(([num, n]) => LA_CASES.forEach((c, i) => { const e = LA_END[k][n][i]; out[`${c} ${num}`] = e === null ? nom : st + e; }));
+  return out;
+}
+function genLatin(kind) {
+  const isVerb = kind === 'v' ? true : kind === 'n' ? false : Math.random() < .55;
+  let form, readings, allLabels, near, src;
+  if (isVerb) {
+    const v = pick(LA_VERBS), T = laVerbTable(v);
+    const tense = pick(LA_TENSES), p = randInt(0, 5);
+    form = T[tense][p];
+    readings = []; allLabels = [];
+    for (const t of LA_TENSES) T[t].forEach((f, i) => { const l = `${LA_PERS[i]} ${t}`; allLabels.push(l); if (f === form) readings.push(l); });
+    const right = `${LA_PERS[p]} ${tense}`;
+    near = allLabels.filter(l => !readings.includes(l) && (l.startsWith(LA_PERS[p]) || l.endsWith(tense)));
+    src = `von ${v[0]} (${v[1]})`;
+    return laCard(form, right, readings, near, allLabels, src, 'lf-v-' + tense);
+  }
+  const n = pick(LA_NOUNS), T = laNounTable(n), labels = Object.keys(T), right = pick(labels);
+  form = T[right];
+  readings = labels.filter(l => T[l] === form);
+  const [cs, num] = right.split(' ');
+  near = labels.filter(l => !readings.includes(l) && (l.startsWith(cs) || l.endsWith(num)));
+  src = `von ${n[0]} (${n[1]})`;
+  return laCard(form, right, readings, near, labels, src, 'lf-n-' + cs);
+}
+function laCard(form, right, readings, near, all, src, key) {
+  const pool = shuffle(near.slice()).concat(shuffle(all.filter(l => !readings.includes(l) && !near.includes(l))));
+  const opts = shuffle([right].concat(pool.slice(0, 3)));
+  const also = readings.filter(r => r !== right);
+  return { key, q: form, a: right, opts, sub: src, ask: 'Bestimme die Form.',
+    explain: `${form} = ${right}${also.length ? ' · auch möglich: ' + also.join(', ') : ''}`, meta: '🏛️ Formen bestimmen' };
+}
+function buildLatinQueue(kind) {
+  const out = [];
+  for (let i = 0; i < 15; i++) {
+    const f = genLatin(kind);
+    out.push({ card: { id: f.key + '#' + i, mkey: f.key, lang: 'la', unit: 'Formen', term: f.q, translation: f.a, ask: f.ask, opts: f.opts, explain: f.explain, sub: f.sub, meta: f.meta }, dir: 'mm' });
+  }
+  return out;
+}
+function startLatin() {
+  const d = AD(); if (!d) return;
+  SES = { d, queue: buildLatinQueue(S.prefs.lfKind || 'vn'), i: 0, combo: 0, xp: 0, mode: 'mc', practice: false };
+  show('session');
+}
+
+/* ---------- Tageslog, Wochenbericht ---------- */
+function logAnswer(st, ok, xp) {
+  const lg = st.log || (st.log = {}), t = dayStr();
+  const e = lg[t] || (lg[t] = { n: 0, ok: 0, xp: 0 });
+  e.n++; if (ok) e.ok++; e.xp += xp || 0;
+  const cut = addDays(-70);
+  for (const k of Object.keys(lg)) if (k < cut) delete lg[k];
+}
+function weekDays(off = 0) {
+  const now = new Date(), dow = (now.getDay() + 6) % 7, mon = new Date(now);
+  mon.setDate(now.getDate() - dow + off * 7);
+  return Array.from({ length: 7 }, (_, i) => { const x = new Date(mon); x.setDate(mon.getDate() + i); return dayStr(x); });
+}
+function weekSum(st, off = 0) {
+  const L = (st && st.log) || {}; let n = 0, ok = 0, xp = 0, days = 0;
+  const per = weekDays(off).map(dd => { const e = L[dd] || {}; n += e.n || 0; ok += e.ok || 0; xp += e.xp || 0; if (e.n) days++; return e.n || 0; });
+  return { n, ok, xp, days, per };
+}
+function weekCard(d, opts = {}) {
+  const w = weekSum(d.state), pw = weekSum(d.state, -1), max = Math.max(...w.per, 1), days = weekDays(), today = dayStr();
+  const lab = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  let rep = '';
+  if (!opts.compact) {
+    const since = addDays(-7), list = [];
+    for (const v of d.vocab) for (const dr of statDirs(d, v)) { const p = prog(d, v.id, dr); if (p && p.box === 1 && (p.updated_at || '').slice(0, 10) >= since) { list.push(v); break; } }
+    rep = list.length ? `<div class="label" style="margin-top:14px">Muss wiederholt werden</div>
+      ${list.slice(0, 6).map(v => `<div class="wl"><span><b>${esc(wordLabel(v))}</b></span><span>${esc(transLabel(v))}</span></div>`).join('')}${list.length > 6 ? `<div class="small muted">… und ${list.length - 6} weitere</div>` : ''}` : '';
+  }
+  return `<div class="card">
+    <h3>📅 ${opts.title || 'Diese Woche'}</h3>
+    <div class="wk">${w.per.map((n, i) => `<div class="wkd ${days[i] === today ? 'today' : ''}"><b>${n || ''}</b><div class="wkb"><i style="height:${Math.round(n / max * 100)}%"></i></div><span>${lab[i]}</span></div>`).join('')}</div>
+    <div class="small" style="margin-top:8px"><b>${w.days}/7</b> Tage geübt · <b>${w.n}</b> Antworten · <b>${pct(w.ok, w.n)} %</b> richtig · <b>${w.xp}</b> XP</div>
+    <div class="small muted">Vorwoche: ${pw.days} Tage · ${pw.n} Antworten · ${pw.xp} XP</div>
+    ${rep}
+  </div>`;
+}
+
+/* ---------- Familien-Wochenziel ---------- */
+function familyGoal() {
+  let best = null;
+  for (const l of S.learners) { const f = data(l.id).state.family; if (f && (!best || ts(f.at) > ts(best.at))) best = f; }
+  return best && best.title ? best : null;
+}
+function familyHtml(d) {
+  const f = familyGoal(); if (!f) return '';
+  let total = 0;
+  for (const l of S.learners) total += weekSum(data(l.id).state).xp;
+  const mine = d ? weekSum(d.state).xp : 0, done = total >= f.target;
+  return `<div class="card reward family ${done ? 'done' : ''}">
+    <div class="row" style="margin:0;justify-content:space-between;align-items:center"><b>👨‍👩‍👧 ${esc(f.title)}</b><span class="small muted">${Math.min(total, f.target)} / ${f.target} XP</span></div>
+    <div class="bar ${done ? 'done' : ''}" style="height:10px;margin-top:8px"><i style="width:${pct(total, f.target)}%"></i></div>
+    <div class="small" style="margin-top:8px">${done ? '🎉 Gemeinsam geschafft!' : 'Familienziel diese Woche'}${d ? ` · dein Beitrag: ${mine} XP` : ''}</div></div>`;
+}
+function setFamilyGoal(obj) {
+  for (const l of S.learners) { const d = data(l.id); d.state.family = Object.assign({ at: nowIso() }, obj); touchState(d); saveData(d); }
+}
+
+/* ---------- Formelsammlung ---------- */
+const FX_LVL = { gs: 'Grundschule', '58': 'Klasse 5–8', '9': 'ab Klasse 9' };
+const FORMULAS = [
+  // Einheiten
+  { f: 'Einheiten', l: 'gs', t: 'Längen', x: '1 km = 1000 m · 1 m = 100 cm · 1 cm = 10 mm', v: [['1 m', '= 10 dm = 100 cm = 1000 mm']], e: '3,5 m = 350 cm', tip: 'Von groß nach klein: mal rechnen. Von klein nach groß: geteilt rechnen.' },
+  { f: 'Einheiten', l: 'gs', t: 'Gewichte', x: '1 t = 1000 kg · 1 kg = 1000 g', v: [['1 kg', '= 1000 g'], ['1 t', '= 1000 kg']], e: '2500 g = 2,5 kg', tip: '' },
+  { f: 'Einheiten', l: 'gs', t: 'Zeit', x: '1 Tag = 24 h · 1 h = 60 min · 1 min = 60 s', v: [['1 Woche', '= 7 Tage'], ['1 Jahr', '= 365 Tage (Schaltjahr 366)']], e: '2 h 15 min = 135 min', tip: 'Bei der Zeit rechnet man mit 60, nicht mit 100!' },
+  { f: 'Einheiten', l: 'gs', t: 'Geld', x: '1 € = 100 ct', v: [], e: '3,45 € = 345 ct', tip: 'Das Komma trennt Euro und Cent.' },
+  { f: 'Einheiten', l: 'gs', t: 'Hohlmaße', x: '1 l = 1000 ml', v: [['½ l', '= 500 ml'], ['¼ l', '= 250 ml']], e: '1,5 l = 1500 ml', tip: '' },
+  { f: 'Einheiten', l: '58', t: 'Flächen', x: '1 m² = 100 dm² = 10 000 cm²', v: [['1 cm²', '= 100 mm²'], ['1 a', '= 100 m²'], ['1 ha', '= 100 a = 10 000 m²'], ['1 km²', '= 100 ha']], e: '3 m² = 30 000 cm²', tip: 'Bei Flächen ist die Umrechnungszahl 100.' },
+  { f: 'Einheiten', l: '58', t: 'Volumen', x: '1 m³ = 1000 dm³ · 1 dm³ = 1000 cm³', v: [['1 dm³', '= 1 l'], ['1 cm³', '= 1 ml']], e: '2,5 dm³ = 2,5 l = 2500 cm³', tip: 'Bei Volumen ist die Umrechnungszahl 1000.' },
+  // Mathe Grundschule
+  { f: 'Mathe', l: 'gs', t: 'Punkt vor Strich', x: '· und : vor + und −', v: [['Klammern', 'werden immer zuerst gerechnet']], e: '3 + 4 · 2 = 3 + 8 = 11 · (3 + 4) · 2 = 14', tip: '' },
+  { f: 'Mathe', l: 'gs', t: 'Umfang Rechteck / Quadrat', x: 'u = 2 · a + 2 · b · Quadrat: u = 4 · a', v: [['u', 'Umfang (cm)'], ['a, b', 'Seitenlängen (cm)']], e: 'a = 5 cm, b = 3 cm → u = 16 cm', tip: 'Umfang = einmal ringsherum alle Seiten zusammen.' },
+  { f: 'Mathe', l: 'gs', t: 'Flächeninhalt Rechteck / Quadrat', x: 'A = a · b · Quadrat: A = a · a', v: [['A', 'Flächeninhalt (cm²)'], ['a, b', 'Seitenlängen (cm)']], e: 'a = 5 cm, b = 3 cm → A = 15 cm²', tip: 'Fläche = wie viele Kästchen hineinpassen.' },
+  // Mathe 5–8
+  { f: 'Mathe', l: '58', t: 'Dreieck', x: 'A = ½ · g · h', v: [['g', 'Grundseite'], ['h', 'Höhe (senkrecht auf g)']], e: 'g = 6 cm, h = 4 cm → A = 12 cm²', tip: 'Innenwinkelsumme im Dreieck: 180°.' },
+  { f: 'Mathe', l: '58', t: 'Parallelogramm', x: 'A = g · h', v: [['g', 'Grundseite'], ['h', 'Höhe']], e: 'g = 7 cm, h = 3 cm → A = 21 cm²', tip: '' },
+  { f: 'Mathe', l: '58', t: 'Trapez', x: 'A = ½ · (a + c) · h', v: [['a, c', 'parallele Seiten'], ['h', 'Höhe']], e: 'a = 8, c = 4, h = 3 → A = 18', tip: '' },
+  { f: 'Mathe', l: '58', t: 'Würfel', x: 'V = a³ · O = 6 · a²', v: [['V', 'Volumen'], ['O', 'Oberfläche'], ['a', 'Kantenlänge']], e: 'a = 3 cm → V = 27 cm³, O = 54 cm²', tip: '' },
+  { f: 'Mathe', l: '58', t: 'Quader', x: 'V = a · b · c · O = 2 · (ab + ac + bc)', v: [['a, b, c', 'Kantenlängen']], e: '2 × 3 × 4 cm → V = 24 cm³, O = 52 cm²', tip: '' },
+  { f: 'Mathe', l: '58', t: 'Prisma', x: 'V = G · h', v: [['G', 'Grundfläche'], ['h', 'Höhe des Prismas']], e: 'G = 10 cm², h = 5 cm → V = 50 cm³', tip: '' },
+  { f: 'Mathe', l: '58', t: 'Prozentrechnung', x: 'W = G · p / 100', v: [['W', 'Prozentwert'], ['G', 'Grundwert (das Ganze)'], ['p', 'Prozentsatz in %']], e: '20 % von 80 € = 80 · 20 / 100 = 16 €', tip: 'p = W / G · 100 · G = W / p · 100' },
+  { f: 'Mathe', l: '58', t: 'Zinsen', x: 'Z = K · p / 100', v: [['Z', 'Jahreszinsen'], ['K', 'Kapital'], ['p', 'Zinssatz in %']], e: '500 € zu 2 % → 10 € Zinsen im Jahr', tip: 'Für m Monate: Z = K · p / 100 · m / 12' },
+  { f: 'Mathe', l: '58', t: 'Dreisatz', x: 'Einheit berechnen, dann vervielfachen', v: [], e: '3 Hefte kosten 6 € → 1 Heft 2 € → 5 Hefte 10 €', tip: 'Bei antiproportionalen Größen umgekehrt rechnen (mehr Arbeiter → weniger Zeit).' },
+  { f: 'Mathe', l: '58', t: 'Binomische Formeln', x: '(a + b)² = a² + 2ab + b² · (a − b)² = a² − 2ab + b² · (a + b)(a − b) = a² − b²', v: [], e: '(x + 3)² = x² + 6x + 9', tip: 'Die Mitte (2ab) wird oft vergessen!' },
+  { f: 'Mathe', l: '58', t: 'Lineare Funktion', x: 'y = m · x + b', v: [['m', 'Steigung'], ['b', 'y-Achsenabschnitt']], e: 'y = 2x + 1 geht durch (0|1) und (1|3)', tip: 'm = (y₂ − y₁) / (x₂ − x₁)' },
+  { f: 'Mathe', l: '58', t: 'Winkelsummen', x: 'Dreieck 180° · Viereck 360°', v: [['Gerader Winkel', '180°'], ['Vollwinkel', '360°']], e: '', tip: 'n-Eck: (n − 2) · 180°' },
+  { f: 'Mathe', l: '58', t: 'Mittelwert', x: 'x̄ = Summe aller Werte / Anzahl der Werte', v: [], e: '(2 + 4 + 9) / 3 = 5', tip: '' },
+  { f: 'Mathe', l: '58', t: 'Wahrscheinlichkeit (Laplace)', x: 'P = Anzahl günstige / Anzahl mögliche Ergebnisse', v: [], e: 'Würfel, eine 6: P = 1/6 ≈ 16,7 %', tip: '' },
+  { f: 'Mathe', l: '9', t: 'Kreis', x: 'u = 2 · π · r = π · d · A = π · r²', v: [['r', 'Radius'], ['d', 'Durchmesser = 2r'], ['π', '≈ 3,14']], e: 'r = 2 cm → A ≈ 12,57 cm²', tip: '' },
+  { f: 'Mathe', l: '9', t: 'Zylinder', x: 'V = π · r² · h', v: [['r', 'Radius'], ['h', 'Höhe']], e: 'r = 1 cm, h = 10 cm → V ≈ 31,4 cm³', tip: '' },
+  { f: 'Mathe', l: '9', t: 'Satz des Pythagoras', x: 'a² + b² = c²', v: [['a, b', 'Katheten'], ['c', 'Hypotenuse (gegenüber dem rechten Winkel)']], e: 'a = 3, b = 4 → c = 5', tip: 'Gilt nur im rechtwinkligen Dreieck.' },
+  { f: 'Mathe', l: '9', t: 'Potenzgesetze', x: 'aᵐ · aⁿ = aᵐ⁺ⁿ · aᵐ : aⁿ = aᵐ⁻ⁿ · (aᵐ)ⁿ = aᵐ·ⁿ', v: [['a⁰', '= 1'], ['a⁻ⁿ', '= 1 / aⁿ']], e: '2³ · 2² = 2⁵ = 32', tip: '' },
+  // Physik
+  { f: 'Physik', l: '58', t: 'Geschwindigkeit', x: 'v = s / t', v: [['v', 'Geschwindigkeit (m/s, km/h)'], ['s', 'Weg (m)'], ['t', 'Zeit (s)']], e: '100 m in 20 s → v = 5 m/s', tip: '1 m/s = 3,6 km/h' },
+  { f: 'Physik', l: '58', t: 'Dichte', x: 'ρ = m / V', v: [['ρ', 'Dichte (g/cm³)'], ['m', 'Masse (g)'], ['V', 'Volumen (cm³)']], e: '54 g Aluminium mit 20 cm³ → ρ = 2,7 g/cm³', tip: 'Wasser hat 1 g/cm³ – was dichter ist, geht unter.' },
+  { f: 'Physik', l: '58', t: 'Gewichtskraft', x: 'F = m · g', v: [['F', 'Gewichtskraft (N)'], ['m', 'Masse (kg)'], ['g', 'Ortsfaktor, auf der Erde ≈ 9,81 N/kg']], e: '2 kg → F ≈ 19,6 N', tip: 'Masse (kg) ist überall gleich, die Gewichtskraft (N) nicht – auf dem Mond ist g ≈ 1,6 N/kg.' },
+  { f: 'Physik', l: '58', t: 'Hookesches Gesetz', x: 'F = D · s', v: [['F', 'Kraft (N)'], ['D', 'Federkonstante (N/m)'], ['s', 'Dehnung (m)']], e: 'D = 50 N/m, s = 0,1 m → F = 5 N', tip: '' },
+  { f: 'Physik', l: '58', t: 'Hebelgesetz', x: 'F₁ · a₁ = F₂ · a₂', v: [['F', 'Kraft'], ['a', 'Hebelarm (Abstand zum Drehpunkt)']], e: '10 N bei 2 m ↔ 20 N bei 1 m', tip: 'Langer Hebel = wenig Kraft.' },
+  { f: 'Physik', l: '58', t: 'Druck', x: 'p = F / A', v: [['p', 'Druck (Pa = N/m²)'], ['F', 'Kraft (N)'], ['A', 'Fläche (m²)']], e: '100 N auf 0,5 m² → p = 200 Pa', tip: '1 bar = 100 000 Pa' },
+  { f: 'Physik', l: '58', t: 'Mechanische Arbeit', x: 'W = F · s', v: [['W', 'Arbeit (J = N·m)'], ['F', 'Kraft (N)'], ['s', 'Weg (m)']], e: '50 N über 2 m → W = 100 J', tip: '' },
+  { f: 'Physik', l: '58', t: 'Leistung', x: 'P = W / t', v: [['P', 'Leistung (W = J/s)'], ['W', 'Arbeit/Energie (J)'], ['t', 'Zeit (s)']], e: '600 J in 10 s → P = 60 W', tip: '' },
+  { f: 'Physik', l: '58', t: 'Ohmsches Gesetz', x: 'U = R · I', v: [['U', 'Spannung (V)'], ['R', 'Widerstand (Ω)'], ['I', 'Stromstärke (A)']], e: 'R = 10 Ω, I = 2 A → U = 20 V', tip: 'Merkhilfe: URI – U oben, R und I unten.' },
+  { f: 'Physik', l: '58', t: 'Elektrische Leistung', x: 'P = U · I', v: [['P', 'Leistung (W)'], ['U', 'Spannung (V)'], ['I', 'Stromstärke (A)']], e: '230 V · 2 A = 460 W', tip: '' },
+  { f: 'Physik', l: '58', t: 'Elektrische Energie', x: 'E = P · t', v: [['E', 'Energie (Wh, kWh)'], ['P', 'Leistung (W)'], ['t', 'Zeit (h)']], e: '1000 W eine Stunde → 1 kWh', tip: '' },
+  // Chemie
+  { f: 'Chemie', l: '58', t: 'Wichtige Elementsymbole', x: 'H, O, N, C, S, Na, Cl, Fe, Cu, Ca, Mg, Al, Zn, Ag, Au', v: [['H', 'Wasserstoff'], ['O', 'Sauerstoff'], ['N', 'Stickstoff'], ['C', 'Kohlenstoff'], ['S', 'Schwefel'], ['Na', 'Natrium'], ['Cl', 'Chlor'], ['Fe', 'Eisen'], ['Cu', 'Kupfer'], ['Ca', 'Calcium'], ['Mg', 'Magnesium'], ['Al', 'Aluminium'], ['Zn', 'Zink'], ['Ag', 'Silber'], ['Au', 'Gold']], e: '', tip: '' },
+  { f: 'Chemie', l: '58', t: 'Wichtige Formeln', x: 'H₂O · CO₂ · O₂ · H₂ · N₂ · NaCl · CH₄', v: [['H₂O', 'Wasser'], ['CO₂', 'Kohlenstoffdioxid'], ['O₂', 'Sauerstoff'], ['H₂', 'Wasserstoff'], ['N₂', 'Stickstoff'], ['NaCl', 'Kochsalz (Natriumchlorid)'], ['CH₄', 'Methan']], e: '', tip: 'Die kleine Zahl gibt an, wie viele Atome im Teilchen sind.' },
+  { f: 'Chemie', l: '58', t: 'Reaktionsgleichungen', x: '2 H₂ + O₂ → 2 H₂O · C + O₂ → CO₂', v: [['Edukte', 'Ausgangsstoffe (links)'], ['Produkte', 'Reaktionsprodukte (rechts)']], e: 'Wasserstoff + Sauerstoff → Wasser', tip: 'Links und rechts müssen gleich viele Atome jeder Sorte stehen.' },
+  { f: 'Chemie', l: '58', t: 'Aggregatzustände', x: 'fest ⇄ flüssig ⇄ gasförmig', v: [['Schmelzen', 'fest → flüssig'], ['Erstarren', 'flüssig → fest'], ['Verdampfen', 'flüssig → gasförmig'], ['Kondensieren', 'gasförmig → flüssig'], ['Sublimieren', 'fest → gasförmig'], ['Resublimieren', 'gasförmig → fest']], e: 'Wasser: Schmelztemperatur 0 °C, Siedetemperatur 100 °C', tip: '' },
+  { f: 'Chemie', l: '58', t: 'Nachweisreaktionen', x: 'Glimmspan · Knallgas · Kalkwasser · Kupfersulfat', v: [['Sauerstoff', 'Glimmspan glüht auf'], ['Wasserstoff', 'Knallgasprobe: pfeifender Knall'], ['Kohlenstoffdioxid', 'Kalkwasser wird trüb'], ['Wasser', 'weißes Kupfersulfat wird blau']], e: '', tip: '' },
+  { f: 'Chemie', l: '58', t: 'Erhaltung der Masse', x: 'Masse vorher = Masse nachher', v: [], e: 'Bei einer Reaktion im geschlossenen Gefäß bleibt die Gesamtmasse gleich.', tip: 'Atome gehen nicht verloren, sie ordnen sich nur neu an.' },
+  { f: 'Chemie', l: '58', t: 'Exotherm / endotherm', x: 'exotherm: Energie wird frei · endotherm: Energie wird benötigt', v: [], e: 'Verbrennung = exotherm', tip: '' },
+  { f: 'Chemie', l: '9', t: 'Stoffmenge', x: 'n = m / M', v: [['n', 'Stoffmenge (mol)'], ['m', 'Masse (g)'], ['M', 'molare Masse (g/mol)']], e: '18 g Wasser (M = 18 g/mol) → n = 1 mol', tip: '' }
+];
+const FX = { f: '*', l: '*', q: '' };
+function renderFormeln() {
+  document.body.dataset.lang = '';
+  const fs = ['*', 'Mathe', 'Physik', 'Chemie', 'Einheiten'], ls = ['*', 'gs', '58', '9'];
+  $('#v-formeln').innerHTML = `
+  <header class="top"><h1>Formeln</h1></header>
+  <input id="fxq" class="field" placeholder="🔍 Suchen, z. B. Dichte, Kreis, kg …" value="${esc(FX.q)}" autocapitalize="off" autocorrect="off">
+  <div class="label">Fach</div>
+  <div class="chips">${fs.map(f => `<button class="chip ${FX.f === f ? 'on' : ''}" data-act="fxf" data-v="${f}">${f === '*' ? 'Alle' : f}</button>`).join('')}</div>
+  <div class="label">Stufe</div>
+  <div class="chips">${ls.map(l => `<button class="chip ${FX.l === l ? 'on' : ''}" data-act="fxl" data-v="${l}">${l === '*' ? 'Alle' : FX_LVL[l]}</button>`).join('')}</div>
+  <div id="fxlist" style="margin-top:12px"></div>`;
+  renderFxList();
+}
+function renderFxList() {
+  const q = norm(FX.q);
+  const list = FORMULAS.filter(x => (FX.f === '*' || x.f === FX.f) && (FX.l === '*' || x.l === FX.l)
+    && (!q || norm([x.t, x.x, x.e, x.tip, x.v.map(v => v.join(' ')).join(' ')].join(' ')).includes(q)));
+  $('#fxlist').innerHTML = list.length ? list.map(x => `
+  <details class="card fx">
+    <summary><span class="fxt">${esc(x.t)}</span><span class="fxb">${esc(x.f)} · ${esc(FX_LVL[x.l])}</span><code class="fxx">${esc(x.x)}</code></summary>
+    ${x.v.length ? `<table class="fxv">${x.v.map(([a, b]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join('')}</table>` : ''}
+    ${x.e ? `<div class="small" style="margin-top:8px"><b>Beispiel:</b> ${esc(x.e)}</div>` : ''}
+    ${x.tip ? `<div class="hint small">💡 ${esc(x.tip)}</div>` : ''}
+  </details>`).join('') : `<div class="card empty"><p class="muted">Nichts gefunden.</p></div>`;
 }
 
 /* ============================================================
@@ -1276,6 +1765,7 @@ function renderStats() {
   const st = d.state, lv = levelInfo(st.xp || 0), me = learner(d.lid);
   let c = 0, w = 0; Object.values(d.progress).forEach(p => { c += p.correct || 0; w += p.wrong || 0; });
   Object.values(st.math || {}).forEach(p => { c += p.ok || 0; w += p.wr || 0; });
+  Object.values(st.ext || {}).forEach(p => { c += p.correct || 0; w += p.wrong || 0; });
   let html = `<header class="top"><div><div class="muted small">Statistik</div><h1>${esc(me ? me.name : '')}</h1></div>${syncBadge()}</header>
   ${learnerChips('slearner', d.lid)}
   <div class="kpis">
@@ -1283,7 +1773,8 @@ function renderStats() {
     <div class="stat"><div class="big">🔥 ${currentStreak(d)}</div><div class="muted small">Tage in Folge</div></div>
     <div class="stat"><div class="big">✍️ ${c + w}</div><div class="muted small">Antworten gesamt</div></div>
     <div class="stat"><div class="big">🎯 ${pct(c, c + w)} %</div><div class="muted small">Trefferquote</div></div>
-  </div>`;
+  </div>
+  ${weekCard(d)}`;
   let any = false;
   for (const [lang, L] of Object.entries(LANGS)) {
     const cards = d.vocab.filter(v => v.lang === lang);
@@ -1291,13 +1782,13 @@ function renderStats() {
     any = true;
     const box = [0, 0, 0, 0, 0, 0];
     let items = 0;
-    for (const v of cards) for (const dr of dirsFor(v)) { const p = prog(d, v.id, dr); box[p ? p.box : 0]++; items++; }
+    for (const v of cards) for (const dr of statDirs(d, v)) { const p = prog(d, v.id, dr); box[p ? p.box : 0]++; items++; }
     const units = unitsOf(d, lang).map(u => {
       const cs = cards.filter(v => v.unit === u);
-      let sum = 0, max = 0; cs.forEach(v => dirsFor(v).forEach(dr => { const p = prog(d, v.id, dr); sum += p ? p.box : 0; max += 5; }));
+      let sum = 0, max = 0; cs.forEach(v => statDirs(d, v).forEach(dr => { const p = prog(d, v.id, dr); sum += p ? p.box : 0; max += 5; }));
       return [u, pct(sum, max)];
     });
-    const hard = cards.map(v => ({ v, wr: dirsFor(v).reduce((s, dr) => s + ((prog(d, v.id, dr) || {}).wrong || 0), 0) }))
+    const hard = cards.map(v => ({ v, wr: statDirs(d, v).reduce((s, dr) => s + ((prog(d, v.id, dr) || {}).wrong || 0), 0) }))
       .filter(x => x.wr > 0).sort((a, b) => b.wr - a.wr).slice(0, 5);
     html += `<div class="card">
       <h3>${L.flag} ${esc(L.name)} <span class="muted small">· ${cards.length} ${isDeLang(lang) ? 'Wörter' : isWi(lang) ? 'Karten' : 'Vokabeln'}</span></h3>
@@ -1310,7 +1801,11 @@ function renderStats() {
     </div>`;
   }
   const M = st.math || {};
-  if (Object.keys(M).length) {
+  const accRow = (lab, p) => `<div class="urow"><span class="n">${esc(lab)}</span><div class="bar"><i style="width:${pct(p.ok, p.ok + p.wr)}%"></i></div><span class="p">${pct(p.ok, p.ok + p.wr)} %</span></div>`;
+  const gx = Object.keys(M).filter(k => /^[gx]-/.test(k)).sort();
+  const lf = Object.keys(M).filter(k => k.startsWith('lf-')).sort();
+  if (lf.length) { any = true; html += `<div class="card"><h3>🏛️ Latein-Formen</h3><p class="small muted" style="margin-top:0">Trefferquote je Bestimmung</p>${lf.map(k => accRow(k.slice(5), M[k])).join('')}</div>`; }
+  if (Object.keys(M).some(k => !k.startsWith('lf-'))) {
     any = true;
     const rows = [2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => [r, mathRowStats(d, r)]).filter(([, s]) => s.done);
     const pm = ['k+', 'k-'].map(k => M[k]).filter(Boolean), pmOk = pm.reduce((s, p) => s + p.ok, 0), pmAll = pm.reduce((s, p) => s + p.ok + p.wr, 0);
@@ -1318,6 +1813,7 @@ function renderStats() {
     html += `<div class="card"><h3>${MATH.flag} Mathe</h3>
       ${rows.length ? `<div class="label" style="margin-top:6px">Einmaleins</div>${rows.map(([r, s]) => `<div class="urow"><span class="n">${r}er-Reihe</span><div class="bar ${s.pct >= 100 ? 'done' : ''}"><i style="width:${s.pct}%"></i></div><span class="p">${s.pct} %</span></div>`).join('')}` : ''}
       ${pmAll ? `<div class="label" style="margin-top:14px">Plus / Minus</div><div class="small">${pmOk} von ${pmAll} richtig (${pct(pmOk, pmAll)} %)</div>` : ''}
+      ${gx.length ? `<div class="label" style="margin-top:14px">Trefferquote</div>${gx.map(k => accRow(MA_LABEL[k] || k, M[k])).join('')}` : ''}
       ${hard.length ? `<div class="label" style="margin-top:14px">Knifflige Aufgaben</div>${hard.map(([k, p]) => { const f = mathFact(k); return `<div class="wl"><span><b>${esc(f.op === 'mul' ? `${k.match(/x(\d+)/)[1]} · ${f.row}` : f.q)}</b> = ${f.a}</span><span>${p.wr}× falsch</span></div>`; }).join('')}` : ''}
     </div>`;
   }
@@ -1435,6 +1931,7 @@ function renderImport() {
   </div>` : isDeLang(IMP.lang) ? `<div class="card small muted">
     💡 <b>Format Deutsch:</b> Wort ; Wortart ; Artikel ; Notiz. Nur das Wort ist Pflicht – reine Lernwörter-Listen für das Diktat gehen also auch.<br><br>
     Nomen dürfen mit Artikel davor stehen („der Hund“). Wortarten: Nomen, Verb, Adjektiv (auch Namenwort, Tunwort, Wiewort). Großgeschriebene Wörter ohne Wortart werden als Nomen erkannt.<br><br>
+    🧩 <b>Für weitere Übungen in die Notiz schreiben:</b> „Mehrzahl: die Hunde“ (Nomen) · „ich laufe, er lief“ oder „Vergangenheit: er lief“ (Verben) · „größer, am größten“ (Adjektive).<br><br>
     📷 Lernwörter-Liste fotografieren und das Foto an Claude schicken – die fertige Liste kommt zurück.
   </div>` : `<div class="card small muted">
     💡 <b>Format:</b> Fremdsprache ; Deutsch ; Notiz (optional). Statt „;“ gehen auch Tab, „=“ oder „ – “. Mehrere richtige Bedeutungen mit Komma trennen.<br><br>
@@ -1503,7 +2000,7 @@ function renderVList() {
   if (q) list = list.filter(v => norm(v.term).includes(q) || norm(v.translation).includes(q));
   list.sort((a, b) => collator.compare(a.unit, b.unit) || (a.created_at || '').localeCompare(b.created_at || ''));
   const shown = list.slice(0, 300);
-  const bx = v => dirsFor(v).map(dr => { const p = prog(d, v.id, dr); return p ? p.box : 0; }).join('|');
+  const bx = v => statDirs(d, v).map(dr => { const p = prog(d, v.id, dr); return p ? p.box : 0; }).join('|');
   $('#vlist').innerHTML = list.length ? `
     <div class="small muted" style="margin-bottom:6px">${list.length} Vokabeln${list.length > 300 ? ' (erste 300 angezeigt – bitte filtern)' : ''} · Tippen zum Bearbeiten · Zahlen = Fach je ${isDeLang(LST.lang) ? 'Übung' : 'Richtung'}</div>
     ${shown.map(v => `<button class="vrow" data-act="edit" data-id="${v.id}"><b>${esc(wordLabel(v))}</b><span>${esc(transLabel(v))}${v.note ? ' · <i>' + esc(v.note) + '</i>' : ''}</span><span class="boxes" style="flex:none">${bx(v)}</span></button>`).join('')}`
@@ -1606,7 +2103,7 @@ function renderSettings() {
     ${learnerChips('plearner', d.lid)}
     <div class="f"><label>Tagesziel (Karten pro Tag)</label>
       <div class="row" style="margin-top:0"><select id="sgoal" class="field grow">${[10, 15, 20, 30, 40, 50].map(n => `<option ${n === (d.state.goal || 20) ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" data-act="goal-save">Speichern</button></div></div>
-    <label class="check"><input type="checkbox" id="smath" ${d.state.showMath !== false ? 'checked' : ''}> 🧮 Mathe-Trainer anzeigen (Einmaleins, Plus/Minus)</label>
+    <div class="f"><label>🧮 Mathe-Trainer</label><select id="smlevel" class="field">${[['off', 'Aus'], ['gs', 'Grundschule (Einmaleins, Kopfrechnen, Größen)'], ['g8', 'Klasse 7–8 (Gleichungen, Binomische Formeln, Terme)']].map(([v, l]) => `<option value="${v}" ${v === mathLevel(d.state) ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
   </div>
   <div class="card">
     <h3>🎁 Belohnungsziel für ${nm}</h3>
@@ -1615,6 +2112,14 @@ function renderSettings() {
     <div class="f"><label>${rw ? 'Neues Ziel' : 'Belohnung'}</label><input id="rwtitle" class="field" placeholder="z. B. Kinoabend, Eis essen, 30 Min. Extra-Spielzeit" maxlength="40"></div>
     <div class="f"><label>Benötigte Punkte (XP)</label><select id="rwtarget" class="field">${[250, 500, 1000, 2000, 3000, 5000].map(n => `<option value="${n}" ${n === 1000 ? 'selected' : ''}>${n} XP${n === 250 ? ' (ca. 2–3 Tage)' : n === 1000 ? ' (ca. 1–2 Wochen)' : n === 5000 ? ' (ca. 2 Monate)' : ''}</option>`).join('')}</select></div>
     <div class="row"><button class="btn primary grow" data-act="rw-save">${rw ? 'Neues Ziel starten' : 'Ziel starten'}</button>${rw ? `<button class="btn ghost" data-act="rw-del">Entfernen</button>` : ''}</div>
+  </div>`; })() : ''}
+  ${S.learners.length ? (() => { const f = familyGoal(); return `<div class="card">
+    <h3>👨‍👩‍👧 Familien-Wochenziel</h3>
+    <p class="small muted" style="margin-top:0">Alle Kinder sammeln gemeinsam Punkte. Zählt jede Woche (Mo–So) neu; jedes Kind sieht das Ziel und seinen Beitrag.</p>
+    ${f ? `<div class="small" style="margin-bottom:10px">Aktuell: <b>${esc(f.title)}</b> – ${f.target} XP pro Woche</div>` : ''}
+    <div class="f"><label>Gemeinsame Belohnung</label><input id="famtitle" class="field" placeholder="z. B. Pizza-Abend, Ausflug, Spieleabend" maxlength="40" value="${esc(f ? f.title : '')}"></div>
+    <div class="f"><label>Punkte pro Woche (alle zusammen)</label><select id="famtarget" class="field">${[500, 1000, 1500, 2000, 3000, 5000].map(n => `<option value="${n}" ${n === (f ? f.target : 1500) ? 'selected' : ''}>${n} XP</option>`).join('')}</select></div>
+    <div class="row"><button class="btn primary grow" data-act="fam-save">Speichern</button>${f ? `<button class="btn ghost" data-act="fam-del">Entfernen</button>` : ''}</div>
   </div>`; })() : ''}
   <div class="card">
     <h3>Synchronisation</h3>
@@ -1706,6 +2211,18 @@ const ACT = {
   marow: el => { S.prefs.maRow = el.dataset.v; savePrefs(); renderHome(); },
   widir: el => { S.prefs.wiDir = el.dataset.v; savePrefs(); renderHome(); },
   dunno3: () => answerVerb(true),
+  'acc3': el => { const a = document.activeElement && /^tv\d$/.test(document.activeElement.id) ? document.activeElement : $('#tv0'); if (!a || a.disabled) return; const s0 = a.selectionStart ?? a.value.length, e0 = a.selectionEnd ?? s0; a.value = a.value.slice(0, s0) + el.dataset.c + a.value.slice(e0); a.setSelectionRange(s0 + 1, s0 + 1); a.focus(); },
+  'ho-play': el => { const it = cur(); speak(it.card.term, it.card.lang, el.dataset.slow ? 0.55 : 0.85); },
+  'start-latin': () => startLatin(),
+  lfkind: el => { S.prefs.lfKind = el.dataset.v; savePrefs(); renderHome(); },
+  fxf: el => { FX.f = el.dataset.v; renderFormeln(); },
+  fxl: el => { FX.l = el.dataset.v; renderFormeln(); },
+  'fam-save': () => {
+    const title = $('#famtitle').value.trim(), target = parseInt($('#famtarget').value, 10) || 1500;
+    if (!title) return toast('Bitte eine Belohnung eintragen', true);
+    setFamilyGoal({ title, target }); sync(); toast('Familienziel gespeichert'); renderParent();
+  },
+  'fam-del': () => { if (!confirm('Familienziel entfernen?')) return; setFamilyGoal({ title: null, target: 0 }); sync(); renderParent(); },
   'rw-save': () => {
     const d = PD(); if (!d) return;
     const title = $('#rwtitle').value.trim(), target = parseInt($('#rwtarget').value, 10) || 1000;
@@ -1835,7 +2352,7 @@ const ACT = {
     S.auth = null; LS.set('auth', null); wipeLocal(); show('login');
   }
 };
-document.addEventListener('pointerdown', e => { if (e.target.closest('[data-act="acc"]')) e.preventDefault(); });
+document.addEventListener('pointerdown', e => { if (e.target.closest('[data-act="acc"],[data-act="acc3"]')) e.preventDefault(); });
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (el && !el.disabled && ACT[el.dataset.act]) { e.preventDefault(); ACT[el.dataset.act](el, e); return; }
@@ -1857,6 +2374,7 @@ document.addEventListener('input', e => {
   if (id === 'itext') { IMP.text = e.target.value; updatePreview(); }
   else if (id === 'inewunit') IMP.newUnit = e.target.value;
   else if (id === 'lq') { LST.q = e.target.value; renderVList(); }
+  else if (id === 'fxq') { FX.q = e.target.value; renderFxList(); }
 });
 document.addEventListener('change', e => {
   const id = e.target.id, v = e.target.value;
@@ -1867,11 +2385,12 @@ document.addEventListener('change', e => {
   else if (id === 'lunit') { LST.unit = v; renderList(); }
   else if (id === 'sdev') { S.prefs.learner = v; savePrefs(); toast('Gerät zugeordnet'); sync(); }
   else if (id === 'sauto') { S.prefs.autoSpeak = e.target.checked; savePrefs(); }
-  else if (id === 'smath') { const d = PD(); if (d) { d.state.showMath = e.target.checked; d.state.settingsAt = nowIso(); touchState(d); saveData(d); sync(); toast('Gespeichert'); } }
+  else if (id === 'smlevel') { const d = PD(); if (d) { d.state.mathLevel = v; d.state.showMath = v !== 'off'; d.state.settingsAt = nowIso(); touchState(d); saveData(d); sync(); toast('Gespeichert'); } }
+
   else if (id === 'bfile') { const f = e.target.files[0]; e.target.value = ''; if (f) importBackup(f); }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && /^tv[01]$/.test((document.activeElement || {}).id || '')) { e.preventDefault(); $('#tv' + (+document.activeElement.id.slice(2) + 1)).focus(); return; }
+  if (e.key === 'Enter' && /^tv\d$/.test((document.activeElement || {}).id || '')) { const nx = $('#tv' + (+document.activeElement.id.slice(2) + 1)); if (nx) { e.preventDefault(); nx.focus(); return; } }
   if (e.key !== 'Enter' || VIEW !== 'session' || !SES) return;
   const a = document.activeElement;
   if (a && (a.tagName === 'INPUT' || a.tagName === 'BUTTON')) return;
